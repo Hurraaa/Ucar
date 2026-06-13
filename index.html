@@ -22,6 +22,10 @@
         <span class="hud-label">EN İYİ</span>
         <span id="best" class="hud-value">0</span>
       </div>
+      <div class="hud-card">
+        <span class="hud-label">SEVİYE</span>
+        <span id="level" class="hud-value">1</span>
+      </div>
       <div class="hud-card speed-card">
         <span class="hud-label">HIZ</span>
         <span id="speed" class="hud-value">0<small>km/s</small></span>
@@ -94,7 +98,11 @@
       </div>
     </div>
 
-    <!-- Duraklat butonu -->
+    <!-- Ses + Duraklat butonları -->
+    <button id="sound-btn" class="pause-btn sound-btn" aria-label="Ses">
+      <svg id="sound-on" viewBox="0 0 24 24"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16 8a5 5 0 010 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg id="sound-off" viewBox="0 0 24 24" class="hidden"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M17 9l5 6M22 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
     <button id="pause-btn" class="pause-btn" aria-label="Duraklat">
       <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
     </button>

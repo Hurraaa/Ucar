@@ -107,6 +107,25 @@
 
     trackLength = segments.length * SEG_LEN;
     placeTraffic(R);
+    placeCoins(R);
+  }
+
+  // Yol boyunca toplanabilir altınlar (şerit üzerinde dizili)
+  function placeCoins(R) {
+    coins = [];
+    const total = segments.length;
+    let z = 50;
+    while (z < total - 30) {
+      z += 8 + Math.floor(R() * 14);
+      // boş bir şerit seç (mümkünse trafiğin olmadığı)
+      const lane = Math.floor(R() * LANES);
+      // küçük zincirler halinde 1-4 altın
+      const chain = 1 + Math.floor(R() * 4);
+      for (let k = 0; k < chain && z + k < total - 30; k++) {
+        coins.push({ seg: (z + k) % total, offset: laneToOffset(lane), z: ((z + k) % total) * SEG_LEN, taken: false });
+      }
+      z += chain;
+    }
   }
 
   function findSegment(z) { return segments[Math.floor(z / SEG_LEN) % segments.length]; }
@@ -127,8 +146,9 @@
     traffic = [];
     const total = segments.length;
     let z = 80;
+    const gap = Math.max(7, 26 / trafficDensity); // yoğunluk arttıkça aralık daralır
     while (z < total - 40) {
-      z += 12 + Math.floor(R() * 26);
+      z += Math.max(6, Math.floor((12 + R() * gap)));
       const lane = Math.floor(R() * LANES); // 0..LANES-1
       traffic.push({
         seg: z % total,
@@ -161,9 +181,18 @@
   };
 
   let score = 0;
+  let coinsCollected = 0;
   let best = Number(localStorage.getItem('ucar_best') || 0);
   let bgOffset = 0;  // dağ/gökyüzü parallax
   let hillOffset = 0;
+
+  // Zorluk / seviye
+  let level = 1;
+  let laps = 0;
+  let speedBoost = 1;       // lap geçtikçe artan üst hız çarpanı
+  let trafficDensity = 1;   // lap geçtikçe artan trafik yoğunluğu
+  let coins = [];
+  const pops = [];          // toplama efektleri
 
   // --------------------------- Girişler -------------------------
   const keys = { left: false, right: false, gas: false, brake: false };
@@ -202,6 +231,90 @@
     btn.addEventListener('mouseleave', () => set(false));
   });
 
+  // --------------------------- Ses (WebAudio) -------------------
+  const Audio = (() => {
+    let ctxA = null, master = null;
+    let engOsc = null, engOsc2 = null, engGain = null, engFilter = null;
+    let enabled = true, started = false;
+
+    function ensure() {
+      if (ctxA) return;
+      try {
+        ctxA = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctxA.createGain();
+        master.gain.value = 0.6;
+        master.connect(ctxA.destination);
+      } catch (e) { enabled = false; }
+    }
+
+    function resume() { if (ctxA && ctxA.state === 'suspended') ctxA.resume(); }
+
+    function startEngine() {
+      ensure(); if (!ctxA || started) return;
+      started = true;
+      engFilter = ctxA.createBiquadFilter();
+      engFilter.type = 'lowpass';
+      engFilter.frequency.value = 700;
+      engGain = ctxA.createGain();
+      engGain.gain.value = 0.0;
+      engOsc = ctxA.createOscillator(); engOsc.type = 'sawtooth'; engOsc.frequency.value = 60;
+      engOsc2 = ctxA.createOscillator(); engOsc2.type = 'square'; engOsc2.frequency.value = 90;
+      engOsc.connect(engFilter); engOsc2.connect(engFilter);
+      engFilter.connect(engGain); engGain.connect(master);
+      engOsc.start(); engOsc2.start();
+    }
+    function stopEngine() {
+      if (engGain) engGain.gain.setTargetAtTime(0.0001, ctxA.currentTime, 0.05);
+    }
+    function engine(speedPct, accel) {
+      if (!ctxA || !engOsc) return;
+      const base = 55 + speedPct * 240;
+      engOsc.frequency.setTargetAtTime(base, ctxA.currentTime, 0.06);
+      engOsc2.frequency.setTargetAtTime(base * 1.5, ctxA.currentTime, 0.06);
+      engFilter.frequency.setTargetAtTime(500 + speedPct * 2200, ctxA.currentTime, 0.08);
+      const vol = (0.05 + speedPct * 0.18) * (accel ? 1.2 : 0.85);
+      engGain.gain.setTargetAtTime(enabled ? vol : 0, ctxA.currentTime, 0.1);
+    }
+
+    function blip(freq, dur, type, vol, slideTo) {
+      ensure(); if (!ctxA || !enabled) return;
+      const o = ctxA.createOscillator(); const g = ctxA.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq;
+      if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, ctxA.currentTime + dur);
+      g.gain.value = vol || 0.2;
+      g.gain.exponentialRampToValueAtTime(0.0001, ctxA.currentTime + dur);
+      o.connect(g); g.connect(master);
+      o.start(); o.stop(ctxA.currentTime + dur);
+    }
+
+    function coin() { blip(880, 0.08, 'triangle', 0.25); blip(1320, 0.12, 'triangle', 0.2); }
+    function crash() {
+      ensure(); if (!ctxA || !enabled) return;
+      const o = ctxA.createOscillator(); const g = ctxA.createGain();
+      o.type = 'sawtooth'; o.frequency.value = 180;
+      o.frequency.exponentialRampToValueAtTime(40, ctxA.currentTime + 0.5);
+      g.gain.value = 0.5; g.gain.exponentialRampToValueAtTime(0.0001, ctxA.currentTime + 0.5);
+      // gürültü
+      const buf = ctxA.createBuffer(1, ctxA.sampleRate * 0.4, ctxA.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const ns = ctxA.createBufferSource(); ns.buffer = buf;
+      const ng = ctxA.createGain(); ng.gain.value = 0.4;
+      ns.connect(ng); ng.connect(master);
+      o.connect(g); g.connect(master);
+      o.start(); o.stop(ctxA.currentTime + 0.5); ns.start();
+    }
+    function level() { blip(523, 0.1, 'square', 0.25); setTimeout(() => blip(784, 0.16, 'square', 0.25), 90); }
+    function ui() { blip(440, 0.06, 'sine', 0.15, 660); }
+
+    return {
+      init: () => { ensure(); resume(); },
+      startEngine, stopEngine, engine, coin, crash, level, ui,
+      toggle: () => { enabled = !enabled; return enabled; },
+      get enabled() { return enabled; }
+    };
+  })();
+
   // --------------------------- UI / Menü ------------------------
   const overlay = document.getElementById('overlay');
   const gameover = document.getElementById('gameover');
@@ -232,7 +345,20 @@
   document.getElementById('menu-btn').addEventListener('click', toMenu);
   pauseBtn.addEventListener('click', togglePause);
 
+  // Ses aç/kapa
+  const soundBtn = document.getElementById('sound-btn');
+  soundBtn.addEventListener('click', () => {
+    Audio.init();
+    const on = Audio.toggle();
+    document.getElementById('sound-on').classList.toggle('hidden', !on);
+    document.getElementById('sound-off').classList.toggle('hidden', on);
+    Audio.ui();
+  });
+
   function startGame() {
+    // Zorluğu sıfırla
+    level = 1; laps = 0; speedBoost = 1; trafficDensity = 1; coinsCollected = 0;
+    pops.length = 0;
     buildTrack();
     player.x = 0; player.z = 0; player.speed = 0; player.steer = 0;
     score = 0; bgOffset = 0; hillOffset = 0;
@@ -241,10 +367,13 @@
     gameover.classList.add('hidden');
     touchControls.classList.add('active');
     pauseBtn.classList.remove('hidden');
+    updateLevelHud();
+    Audio.init(); Audio.startEngine(); Audio.ui();
   }
 
   function toMenu() {
     state = State.MENU;
+    Audio.stopEngine();
     overlay.classList.remove('hidden');
     gameover.classList.add('hidden');
     touchControls.classList.remove('active');
@@ -253,6 +382,7 @@
 
   function gameOver() {
     state = State.OVER;
+    Audio.stopEngine(); Audio.crash();
     if (score > best) { best = score; localStorage.setItem('ucar_best', best); }
     document.getElementById('go-score').textContent = Math.floor(score);
     document.getElementById('go-best').textContent = Math.floor(best);
@@ -263,8 +393,25 @@
   }
 
   function togglePause() {
-    if (state === State.PLAY) { state = State.PAUSE; pauseBtn.classList.add('hidden'); }
-    else if (state === State.PAUSE) { state = State.PLAY; pauseBtn.classList.remove('hidden'); }
+    if (state === State.PLAY) { state = State.PAUSE; pauseBtn.classList.add('hidden'); Audio.stopEngine(); }
+    else if (state === State.PAUSE) { state = State.PLAY; pauseBtn.classList.remove('hidden'); Audio.startEngine(); }
+  }
+
+  const levelEl = document.getElementById('level');
+  function updateLevelHud() { if (levelEl) levelEl.textContent = level; }
+
+  // Lap tamamlandığında zorluğu yükselt
+  function advanceLevel() {
+    laps++;
+    level++;
+    speedBoost = Math.min(1.8, 1 + laps * 0.12);
+    trafficDensity = Math.min(3.2, 1 + laps * 0.35);
+    updateLevelHud();
+    Audio.level();
+    // Yolu yeni yoğunlukla yeniden kur (oyuncu konumunu koru)
+    const keepZ = player.z, keepX = player.x;
+    buildTrack();
+    player.z = keepZ % trackLength; player.x = keepX;
   }
 
   // ------------------------- Projeksiyon ------------------------
@@ -283,6 +430,7 @@
   // ------------------------ Güncelleme --------------------------
   function update(dt) {
     const startPos = player.z;
+    const effMax = MAX_SPEED * speedBoost;
 
     // Hızlanma / frenleme
     if (keys.gas) player.speed += ACCEL * dt;
@@ -290,14 +438,14 @@
     else player.speed += DECEL * dt;
 
     // Şerit değişimi (yumuşak, yol takipli)
-    const laneStep = 1.5 * dt * (0.4 + player.speed / MAX_SPEED);
+    const laneStep = 1.5 * dt * (0.4 + player.speed / effMax);
     if (keys.left)  player.x -= laneStep;
     if (keys.right) player.x += laneStep;
 
-    player.speed = Math.max(0, Math.min(player.speed, MAX_SPEED));
+    player.speed = Math.max(0, Math.min(player.speed, effMax));
 
     const playerSeg = findSegment(player.z);
-    const speedPercent = player.speed / MAX_SPEED;
+    const speedPercent = player.speed / effMax;
 
     // Virajda merkezkaç savrulması
     player.x -= playerSeg.curve * speedPercent * CENTRIFUGAL * dt;
@@ -312,9 +460,9 @@
     }
     player.x = Math.max(-1.6, Math.min(1.6, player.x));
 
-    // İlerle
+    // İlerle (+ lap tamamlandığında seviye atla)
     player.z += player.speed * dt;
-    while (player.z >= trackLength) player.z -= trackLength;
+    if (player.z >= trackLength) { player.z -= trackLength; advanceLevel(); }
     while (player.z < 0) player.z += trackLength;
 
     // Parallax arka plan kaydır
@@ -326,8 +474,36 @@
     scoreEl.textContent = Math.floor(score);
     speedEl.innerHTML = Math.floor(player.speed / MAX_SPEED * 260) + '<small>km/s</small>';
 
+    // Motor sesi
+    Audio.engine(speedPercent, keys.gas);
+
+    // Toplama efektlerini güncelle
+    for (let i = pops.length - 1; i >= 0; i--) {
+      pops[i].t += dt;
+      if (pops[i].t > 0.6) pops.splice(i, 1);
+    }
+
+    // Altın toplama
+    updateCoins();
+
     // Trafik güncelle + çarpışma
     updateTraffic(dt, playerSeg, startPos);
+  }
+
+  function updateCoins() {
+    const pSeg = Math.floor(player.z / SEG_LEN);
+    for (const c of coins) {
+      if (c.taken) continue;
+      const cSeg = Math.floor(c.z / SEG_LEN);
+      const diff = (cSeg - pSeg + segments.length) % segments.length;
+      if (diff <= 1 && Math.abs(player.x - c.offset) < 0.34) {
+        c.taken = true;
+        coinsCollected++;
+        score += 25;
+        Audio.coin();
+        pops.push({ t: 0, text: '+25' });
+      }
+    }
   }
 
   function updateTraffic(dt, playerSeg, startPos) {
@@ -390,9 +566,14 @@
       maxy = seg.p2.screen.y;
     }
 
-    // Araçlar (uzaktan yakına çiz)
+    // Altınlar + araçlar (uzaktan yakına çiz)
     for (let n = visible.length - 1; n >= 0; n--) {
       const seg = visible[n];
+      for (const c of coins) {
+        if (!c.taken && Math.floor(c.z / SEG_LEN) % segments.length === seg.index) {
+          drawCoin(seg, c, seg._visible.fog);
+        }
+      }
       for (const car of traffic) {
         if (Math.floor(car.z / SEG_LEN) % segments.length === seg.index) {
           drawTrafficCar(seg, car, seg._visible.fog);
@@ -403,8 +584,55 @@
     // Oyuncu arabası (ekranın altında, sabit)
     drawPlayerCar();
 
+    // Toplama efektleri (yüzen yazı)
+    drawPops();
+
     // Vinyet
     drawVignette();
+  }
+
+  function drawCoin(seg, c, fog) {
+    const p = seg.p1.screen;
+    if (!p.scale || p.scale <= 0 || !p.w) return;
+    const r = Math.max(2, p.w * 0.08);
+    const cx = p.x + (c.offset * p.w);
+    const bob = Math.sin(performance.now() * 0.005 + c.z * 0.01) * r * 0.6;
+    const cy = p.y - r * 1.6 + bob;
+    if (r < 2) return;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.2, fog);
+    // gölge
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath(); ctx.ellipse(cx, p.y, r * 0.9, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    // madeni para (parıltılı disk)
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+    g.addColorStop(0, '#fff2a8'); g.addColorStop(0.5, '#ffcf33'); g.addColorStop(1, '#e6a000');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.62, r, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#b87800'; ctx.lineWidth = Math.max(1, r * 0.12);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath(); ctx.ellipse(cx - r * 0.18, cy - r * 0.3, r * 0.12, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawPops() {
+    if (!pops.length) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '900 26px ' + getComputedStyle(document.body).fontFamily;
+    for (const p of pops) {
+      const a = 1 - p.t / 0.6;
+      ctx.globalAlpha = Math.max(0, a);
+      ctx.fillStyle = '#ffd84d';
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 4;
+      const y = H * 0.62 - p.t * 80;
+      ctx.strokeText(p.text, W / 2, y);
+      ctx.fillText(p.text, W / 2, y);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'left';
   }
 
   function fogFactor(p) { return 1 / Math.exp(p * p * FOG_DENSITY); }
