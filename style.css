@@ -177,6 +177,28 @@ html, body {
 .drive-pad { display: flex; gap: 18px; }
 .pedals { display: flex; gap: 18px; }
 
+/* Selektör butonu (ortada) */
+.flash-btn {
+  align-self: center;
+  -webkit-appearance: none;
+  border: 1px solid rgba(255,255,255,0.18);
+  width: 70px; height: 70px;
+  border-radius: 50%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  color: #fff5cc;
+  font-size: 8px; font-weight: 800; letter-spacing: 0.5px;
+  cursor: pointer;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(255,240,180,0.35), rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #3a4366, #1b2240);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45), inset 0 2px 1px rgba(255,255,255,0.25), inset 0 -4px 8px rgba(0,0,0,0.4);
+  transition: transform .08s ease, filter .12s ease, box-shadow .12s ease;
+  touch-action: none;
+}
+.flash-btn svg { width: 24px; height: 24px; fill: #ffe27a; filter: drop-shadow(0 0 4px rgba(255,210,80,0.7)); }
+.flash-btn.pressed { transform: scale(0.93); filter: brightness(1.5); box-shadow: 0 0 22px rgba(255,220,120,0.6), inset 0 0 14px rgba(255,220,120,0.5); }
+
 /* --------------------------- Overlay --------------------------- */
 .overlay {
   position: absolute;

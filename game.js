@@ -178,12 +178,17 @@
     while (z < total - 60) {
       z += Math.floor(gap * (0.7 + R() * 0.6));
       const lane = Math.floor(R() * LANES); // 0..LANES-1
+      const cruise = MAX_SPEED * (0.30 + R() * 0.26);  // normal seyir hızı
       traffic.push({
         offset: laneToOffset(lane),
         lane,
         color: TRAFFIC_COLORS[Math.floor(R() * TRAFFIC_COLORS.length)],
-        // Kendi hızı — oyuncudan yavaş, böylece yaklaşıp geçeriz
-        spd: MAX_SPEED * (0.30 + R() * 0.28),
+        cruise,
+        spd: cruise,
+        // Sinirlenince çıkabileceği üst hız — DAİMA oyuncununkinden düşük
+        // (MAX_SPEED * 0.62..0.84), böylece her zaman geçebiliriz.
+        rageMax: MAX_SPEED * (0.62 + R() * 0.22),
+        anger: 0,          // sn cinsinden öfke sayacı (>0 ise gaza basar)
         z: (z % total) * SEG_LEN
       });
     }
@@ -221,6 +226,26 @@
   let trafficDensity = 1;   // lap geçtikçe artan trafik yoğunluğu
   let coins = [];
   const pops = [];          // toplama efektleri
+  let flashTimer = 0;       // selektör görsel parlaması (sn)
+  let flashCooldown = 0;    // selektör tekrar basma beklemesi
+
+  // Selektör (high-beam) at: öndeki yakın araçları sinirlendirir, yarışmaya çalışırlar
+  function doFlash() {
+    if (state !== State.PLAY || flashCooldown > 0) return;
+    flashTimer = 0.4;
+    flashCooldown = 0.45;
+    Audio.flash();
+    let angered = 0;
+    for (const car of traffic) {
+      const dz = wrapDelta(car.z - player.z);
+      // önümüzde (dz>0), makul mesafede ve yakın şeritte olanlar tepki verir
+      if (dz > 0 && dz < SEG_LEN * 70 && Math.abs(player.x - car.offset) < 0.95) {
+        car.anger = 7;          // 7 sn boyunca gaza basar
+        angered++;
+      }
+    }
+    if (angered > 0) pops.push({ t: 0, text: 'SELEKTÖR!' });
+  }
 
   // --------------------------- Girişler -------------------------
   const keys = { left: false, right: false, gas: false, brake: false };
@@ -232,7 +257,13 @@
       case 'ArrowUp': case 'w': case 'W': keys.gas = true; e.preventDefault(); break;
       case 'ArrowDown': case 's': case 'S': keys.brake = true; e.preventDefault(); break;
       case 'p': case 'P': case 'Escape': togglePause(); break;
-      case ' ': if (state === State.MENU) startGame(); else if (state === State.OVER) startGame(); break;
+      case 'f': case 'F': doFlash(); e.preventDefault(); break;
+      case ' ':
+        if (state === State.MENU) startGame();
+        else if (state === State.OVER) startGame();
+        else doFlash();
+        e.preventDefault();
+        break;
     }
   });
   window.addEventListener('keyup', (e) => {
@@ -318,6 +349,20 @@
     btn.addEventListener('mousedown', (e) => { e.preventDefault(); setKey(dir, true); });
     btn.addEventListener('mouseleave', () => setKey(dir, false));
   });
+
+  // Selektör butonu (anlık tetik)
+  const flashBtn = document.getElementById('flash-btn');
+  const flashPress = (e) => {
+    e.preventDefault();
+    Audio.init();
+    flashBtn.classList.add('pressed');
+    doFlash();
+  };
+  const flashRelease = () => flashBtn.classList.remove('pressed');
+  flashBtn.addEventListener('touchstart', flashPress, { passive: false });
+  flashBtn.addEventListener('touchend', (e) => { e.preventDefault(); flashRelease(); }, { passive: false });
+  flashBtn.addEventListener('mousedown', flashPress);
+  window.addEventListener('mouseup', flashRelease);
   window.addEventListener('mouseup', () => {
     for (const dir in ctrlButtons) setKey(dir, false);
   });
@@ -397,10 +442,11 @@
     }
     function level() { blip(523, 0.1, 'square', 0.25); setTimeout(() => blip(784, 0.16, 'square', 0.25), 90); }
     function ui() { blip(440, 0.06, 'sine', 0.15, 660); }
+    function flash() { blip(1200, 0.05, 'square', 0.12, 1800); }
 
     return {
       init: () => { ensure(); resume(); },
-      startEngine, stopEngine, engine, coin, crash, level, ui,
+      startEngine, stopEngine, engine, coin, crash, level, ui, flash,
       toggle: () => { enabled = !enabled; return enabled; },
       get enabled() { return enabled; }
     };
@@ -522,6 +568,10 @@
   function update(dt) {
     const effMax = MAX_SPEED * speedBoost;
 
+    // Selektör sayaçları
+    if (flashTimer > 0) flashTimer -= dt;
+    if (flashCooldown > 0) flashCooldown -= dt;
+
     // Hızlanma / frenleme
     if (keys.gas) player.speed += ACCEL * dt;
     else if (keys.brake) player.speed += BRAKE * dt;
@@ -605,7 +655,14 @@
 
   function updateTraffic(dt) {
     for (const car of traffic) {
-      // Her araç kendi hızıyla ilerler; oyuncu daha hızlı olunca yaklaşıp geçer
+      // Öfke (selektör yedikten sonra) azalır; bitince normale döner
+      if (car.anger > 0) car.anger -= dt;
+      // Hedef hız: sinirliyse öfke üst hızına gaza basar, değilse seyir hızına döner
+      const target = car.anger > 0 ? car.rageMax : car.cruise;
+      const rate = (car.anger > 0 ? 0.9 : 0.4) * MAX_SPEED; // ivme
+      if (car.spd < target) car.spd = Math.min(target, car.spd + rate * dt);
+      else car.spd = Math.max(target, car.spd - rate * dt);
+
       car.z += car.spd * dt;
       if (car.z >= trackLength) car.z -= trackLength;
     }
@@ -670,6 +727,9 @@
       }
     }
 
+    // Selektör ışık huzmeleri (öne doğru)
+    if (flashTimer > 0) drawFlashBeams();
+
     // Oyuncu arabası (ekranın altında, sabit)
     drawPlayerCar();
 
@@ -681,6 +741,30 @@
 
     // Vinyet
     drawVignette();
+  }
+
+  function drawFlashBeams() {
+    const k = Math.max(0, flashTimer / 0.4);
+    const flick = Math.sin(performance.now() * 0.09) * 0.5 + 0.5;
+    const a = k * (0.45 + flick * 0.55);
+    const ox = W / 2 + player.steer * 28;
+    const topY = H * 0.50, botY = H * 0.86;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of [-1, 1]) {
+      const baseX = ox + s * W * 0.045;
+      const g = ctx.createLinearGradient(0, botY, 0, topY);
+      g.addColorStop(0, `rgba(255,248,210,${0.38 * a})`);
+      g.addColorStop(1, 'rgba(255,248,210,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(baseX - W * 0.018, botY);
+      ctx.lineTo(baseX + W * 0.018, botY);
+      ctx.lineTo(ox + s * W * 0.11, topY);
+      ctx.lineTo(ox + s * W * 0.035, topY);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawSpeedLines(pct) {
@@ -711,13 +795,15 @@
     const p = seg.p1.screen;
     if (!p.scale || p.scale <= 0 || !p.w) return;
     const unit = p.w * 0.9;             // derinliğe göre boyut
-    if (unit < 3) return;
+    if (unit < 4) return;
     const bx = p.x + obj.side * (p.w * obj.dist);
     const by = p.y;
     if (bx < -unit * 3 || bx > W + unit * 3) return;
 
     ctx.save();
-    ctx.globalAlpha = Math.min(1, fog * 1.15);
+    // Solgun/hayalet görünümü kaldır: ekran boyutuna bağlı KISA bir geçişle
+    // hızla TAM OPAK olurlar (uzakta belirsizce oluşmazlar).
+    ctx.globalAlpha = Math.min(1, (unit - 4) / 7);
 
     // Zemin gölgesi (hepsi için)
     ctx.fillStyle = 'rgba(0,0,0,0.22)';
@@ -1005,97 +1091,220 @@
   }
 
   // ----------------------- Araç çizimi --------------------------
-  // Arkadan görünüm: gövde, kabin, arka cam, stoplar, tampon, tekerler, gölge
+  // Gerçekçi (GTA tarzı) arkadan görünüm: kavisli parlak gövde, gökyüzü
+  // yansıması, modern LED stoplar, difüzör/egzoz, tinted cam, alaşım jant.
   function drawCarSprite(cx, baseY, width, body, accent, brake) {
     const w = width;
-    const h = w * 0.82;
-    const x = cx - w / 2;
-    const y = baseY - h;
+    const h = w * 0.70;        // arkadan bakışta araç enli, basık
+    const half = w / 2;
 
-    // Yumuşak zemin gölgesi
+    // Dikey seviyeler (baseY = zemin/teker teması)
+    const ySill    = baseY - h * 0.12;   // marşpiyel / gövde alt
+    const yBumper  = baseY - h * 0.30;
+    const yHaunch  = baseY - h * 0.50;    // en geniş yer (arka çamurluk omzu)
+    const yShould  = baseY - h * 0.60;
+    const yRoof    = baseY - h * 0.90;
+    const yTop     = baseY - h * 0.99;
+
+    // Yarı genişlikler
+    const sillHalf  = half * 0.86;
+    const bodyHalf  = half * 0.99;
+    const roofHalf  = half * 0.60;
+
+    // ---- 1) Zemin gölgesi (sıkı, yumuşak AO) ----
     ctx.save();
-    const sg = ctx.createRadialGradient(cx, baseY, 2, cx, baseY, w * 0.62);
-    sg.addColorStop(0, 'rgba(0,0,0,0.45)');
+    const sg = ctx.createRadialGradient(cx, baseY + h * 0.02, w * 0.05, cx, baseY + h * 0.02, w * 0.6);
+    sg.addColorStop(0, 'rgba(0,0,0,0.5)');
+    sg.addColorStop(0.6, 'rgba(0,0,0,0.28)');
     sg.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = sg;
     ctx.beginPath();
-    ctx.ellipse(cx, baseY + h * 0.04, w * 0.62, h * 0.18, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, baseY + h * 0.05, w * 0.6, h * 0.16, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
-    // Tekerlekler (3B: silindirik gölgeleme + metalik jant)
-    const tireW = w * 0.19, tireH = h * 0.40;
-    const tireY = y + h * 0.50;
-    drawWheel(x - tireW * 0.30, tireY, tireW, tireH);
-    drawWheel(x + w - tireW * 0.70, tireY, tireW, tireH);
+    // ---- 2) Tekerlekler (gövdenin arkasında, köşelerde) ----
+    const tireW = w * 0.20, tireH = h * 0.42;
+    const tireY = baseY - tireH;
+    drawWheel(cx - half * 0.84 - tireW / 2, tireY, tireW, tireH);
+    drawWheel(cx + half * 0.84 - tireW / 2, tireY, tireW, tireH);
 
-    // Alt gövde gölgesi
-    ctx.fillStyle = accent;
-    roundRect(x, y + h * 0.42, w, h * 0.5, w * 0.12); ctx.fill();
+    // ---- 3) Ana gövde silüeti (kavisli path) ----
+    function bodyPath() {
+      ctx.beginPath();
+      ctx.moveTo(cx - sillHalf, ySill);
+      ctx.quadraticCurveTo(cx - bodyHalf * 1.03, yBumper, cx - bodyHalf, yHaunch);   // sol çamurluk şişkinliği
+      ctx.quadraticCurveTo(cx - bodyHalf * 0.99, yShould, cx - roofHalf, yRoof);      // sol C-direği
+      ctx.quadraticCurveTo(cx, yTop, cx + roofHalf, yRoof);                            // tavan kavisi
+      ctx.quadraticCurveTo(cx + bodyHalf * 0.99, yShould, cx + bodyHalf, yHaunch);     // sağ C-direği
+      ctx.quadraticCurveTo(cx + bodyHalf * 1.03, yBumper, cx + sillHalf, ySill);       // sağ çamurluk
+      ctx.lineTo(cx - sillHalf, ySill);
+      ctx.closePath();
+    }
 
-    // Ana gövde (dikey gradyan ile hacim)
-    const bg = ctx.createLinearGradient(x, y, x, y + h);
-    bg.addColorStop(0, shade(body, 18));
-    bg.addColorStop(0.45, body);
-    bg.addColorStop(1, shade(body, -28));
-    ctx.fillStyle = bg;
-    roundRect(x, y + h * 0.30, w, h * 0.55, w * 0.13); ctx.fill();
+    // Boya gradyanı — üstte gökyüzü yansıması, ortada renk, altta karanlık
+    ctx.save();
+    bodyPath();
+    ctx.clip();
+    const paint = ctx.createLinearGradient(0, yTop, 0, baseY);
+    paint.addColorStop(0.00, mix(body, '#cfe2f5', 0.6));  // tavan: açık gökyüzü yansıması
+    paint.addColorStop(0.14, mix(body, '#cfe2f5', 0.25));
+    paint.addColorStop(0.30, shade(body, 22));
+    paint.addColorStop(0.46, body);
+    paint.addColorStop(0.66, shade(body, -16));
+    paint.addColorStop(0.85, shade(body, -42));
+    paint.addColorStop(1.00, shade(body, -66));
+    ctx.fillStyle = paint;
+    ctx.fillRect(cx - half - 4, yTop - 4, w + 8, h + 8);
 
-    // Yan aynalar (gövdenin üst köşelerinde küçük çıkıntılar)
-    ctx.fillStyle = shade(body, -20);
-    roundRect(x - w * 0.06, y + h * 0.40, w * 0.10, h * 0.10, w * 0.03); ctx.fill();
-    roundRect(x + w * 0.96, y + h * 0.40, w * 0.10, h * 0.10, w * 0.03); ctx.fill();
-    ctx.fillStyle = '#3a4a5a';
-    roundRect(x - w * 0.045, y + h * 0.415, w * 0.06, h * 0.06, w * 0.02); ctx.fill();
-    roundRect(x + w * 0.985, y + h * 0.415, w * 0.06, h * 0.06, w * 0.02); ctx.fill();
+    // Yatay specular bant (ufuk yansıması) — bel hizasında parlak şerit
+    const spec = ctx.createLinearGradient(0, yHaunch - h * 0.10, 0, yHaunch + h * 0.06);
+    spec.addColorStop(0, 'rgba(255,255,255,0)');
+    spec.addColorStop(0.5, 'rgba(255,255,255,0.28)');
+    spec.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = spec;
+    ctx.fillRect(cx - half, yHaunch - h * 0.10, w, h * 0.16);
 
-    // Kabin / tavan
-    const roofW = w * 0.74, roofX = cx - roofW / 2;
-    const rg = ctx.createLinearGradient(0, y, 0, y + h * 0.4);
-    rg.addColorStop(0, shade(body, 30));
-    rg.addColorStop(1, shade(body, -10));
-    ctx.fillStyle = rg;
-    roundRect(roofX, y + h * 0.05, roofW, h * 0.42, w * 0.12); ctx.fill();
+    // Yanlardaki koyu ortam gölgesi (kenarlara doğru kararma — yuvarlaklık hissi)
+    const sideShade = ctx.createLinearGradient(cx - half, 0, cx + half, 0);
+    sideShade.addColorStop(0, 'rgba(0,0,0,0.34)');
+    sideShade.addColorStop(0.16, 'rgba(0,0,0,0)');
+    sideShade.addColorStop(0.84, 'rgba(0,0,0,0)');
+    sideShade.addColorStop(1, 'rgba(0,0,0,0.34)');
+    ctx.fillStyle = sideShade;
+    ctx.fillRect(cx - half, yTop, w, h);
+    ctx.restore();
 
-    // Arka cam
-    const glassW = roofW * 0.82, glassX = cx - glassW / 2;
-    const gg = ctx.createLinearGradient(0, y + h * 0.1, 0, y + h * 0.34);
-    gg.addColorStop(0, '#2b3848');
-    gg.addColorStop(1, '#5b7388');
-    ctx.fillStyle = gg;
-    roundRect(glassX, y + h * 0.11, glassW, h * 0.22, w * 0.06); ctx.fill();
-    // Cam yansıması
-    ctx.fillStyle = 'rgba(255,255,255,0.12)';
-    roundRect(glassX + glassW * 0.06, y + h * 0.13, glassW * 0.4, h * 0.07, 3); ctx.fill();
+    // Gövde kenar çizgisi (keskinlik)
+    ctx.save();
+    bodyPath();
+    ctx.lineWidth = Math.max(1, w * 0.01);
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.stroke();
+    ctx.restore();
 
-    // Gövde üst highlight çizgisi
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = Math.max(1, w * 0.012);
+    // ---- 4) Yan aynalar ----
+    ctx.fillStyle = shade(body, -18);
+    roundRect(cx - bodyHalf - w * 0.05, yShould + h * 0.02, w * 0.085, h * 0.085, w * 0.025); ctx.fill();
+    roundRect(cx + bodyHalf - w * 0.035, yShould + h * 0.02, w * 0.085, h * 0.085, w * 0.025); ctx.fill();
+    ctx.fillStyle = '#46586c';
+    roundRect(cx - bodyHalf - w * 0.04, yShould + h * 0.03, w * 0.055, h * 0.05, w * 0.02); ctx.fill();
+    roundRect(cx + bodyHalf - w * 0.025, yShould + h * 0.03, w * 0.055, h * 0.05, w * 0.02); ctx.fill();
+
+    // ---- 5) Arka cam (tinted, gradyan + yansıma) ----
+    const gw = roofHalf * 1.7, gx = cx - gw / 2;
+    const gTop = yRoof + h * 0.03, gBot = yShould + h * 0.05;
+    ctx.save();
     ctx.beginPath();
-    ctx.moveTo(x + w * 0.08, y + h * 0.34);
-    ctx.lineTo(x + w * 0.92, y + h * 0.34);
+    ctx.moveTo(cx - gw * 0.5, gBot);
+    ctx.quadraticCurveTo(cx - gw * 0.52, gTop, cx - gw * 0.38, gTop);
+    ctx.lineTo(cx + gw * 0.38, gTop);
+    ctx.quadraticCurveTo(cx + gw * 0.52, gTop, cx + gw * 0.5, gBot);
+    ctx.closePath();
+    ctx.clip();
+    const gg = ctx.createLinearGradient(0, gTop, 0, gBot);
+    gg.addColorStop(0, '#1a2733');
+    gg.addColorStop(0.5, '#33485b');
+    gg.addColorStop(1, '#21303d');
+    ctx.fillStyle = gg;
+    ctx.fillRect(gx - 4, gTop - 4, gw + 8, (gBot - gTop) + 8);
+    // diyagonal cam yansıması
+    ctx.fillStyle = 'rgba(255,255,255,0.14)';
+    ctx.beginPath();
+    ctx.moveTo(gx, gBot); ctx.lineTo(gx + gw * 0.4, gTop);
+    ctx.lineTo(gx + gw * 0.62, gTop); ctx.lineTo(gx + gw * 0.18, gBot);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+    // cam çerçevesi (krom)
+    ctx.lineWidth = Math.max(1, w * 0.008);
+    ctx.strokeStyle = 'rgba(20,24,30,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(cx - gw * 0.5, gBot);
+    ctx.quadraticCurveTo(cx - gw * 0.52, gTop, cx - gw * 0.38, gTop);
+    ctx.lineTo(cx + gw * 0.38, gTop);
+    ctx.quadraticCurveTo(cx + gw * 0.52, gTop, cx + gw * 0.5, gBot);
     ctx.stroke();
 
-    // Tampon
-    ctx.fillStyle = shade(body, -40);
-    roundRect(x + w * 0.02, y + h * 0.78, w * 0.96, h * 0.12, w * 0.05); ctx.fill();
+    // ---- 6) Bagaj/panel dikiş çizgileri ----
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = Math.max(0.6, w * 0.006);
+    ctx.beginPath();  // bagaj kapağı yatay hattı
+    ctx.moveTo(cx - bodyHalf * 0.86, yHaunch + h * 0.02);
+    ctx.lineTo(cx + bodyHalf * 0.86, yHaunch + h * 0.02);
+    ctx.stroke();
 
-    // Stop lambaları
-    const lampY = y + h * 0.58, lampH = h * 0.16, lampW = w * 0.2;
-    const lampColor = brake ? '#ff3b30' : '#c01818';
-    const glow = brake ? 22 : 6;
-    drawLamp(x + w * 0.08, lampY, lampW, lampH, lampColor, glow);
-    drawLamp(x + w * 0.72, lampY, lampW, lampH, lampColor, glow);
-
-    // Ortada LED fren çıtası (frene basınca parlar)
-    if (brake) { ctx.save(); ctx.shadowColor = '#ff2a2a'; ctx.shadowBlur = 16; }
-    ctx.fillStyle = brake ? '#ff4d4d' : '#7a1414';
-    roundRect(x + w * 0.30, y + h * 0.54, w * 0.40, h * 0.045, h * 0.02); ctx.fill();
+    // ---- 7) Stop lambaları (modern LED, yatay, sarmalayan) ----
+    const lampY = yHaunch + h * 0.06, lampH = h * 0.13;
+    const lampColor = brake ? '#ff3b30' : '#cc1f1f';
+    drawTailLight(cx - bodyHalf * 0.92, lampY, bodyHalf * 0.46, lampH, lampColor, brake, false);
+    drawTailLight(cx + bodyHalf * 0.46, lampY, bodyHalf * 0.46, lampH, lampColor, brake, true);
+    // Ortada bağlayan ince LED şeridi
+    if (brake) { ctx.save(); ctx.shadowColor = '#ff2a2a'; ctx.shadowBlur = w * 0.06; }
+    const bar = ctx.createLinearGradient(cx - bodyHalf * 0.46, 0, cx + bodyHalf * 0.46, 0);
+    bar.addColorStop(0, brake ? '#ff5a4a' : '#6e1414');
+    bar.addColorStop(0.5, brake ? '#ff8a7a' : '#8a1a1a');
+    bar.addColorStop(1, brake ? '#ff5a4a' : '#6e1414');
+    ctx.fillStyle = bar;
+    roundRect(cx - bodyHalf * 0.46, lampY + lampH * 0.28, bodyHalf * 0.92, lampH * 0.32, lampH * 0.16); ctx.fill();
     if (brake) ctx.restore();
 
-    // Plaka
-    ctx.fillStyle = '#eef1e0';
-    roundRect(cx - w * 0.14, y + h * 0.80, w * 0.28, h * 0.08, 2); ctx.fill();
+    // ---- 8) Arka tampon + difüzör + egzoz ----
+    const bumpTop = yBumper + h * 0.04;
+    const bg2 = ctx.createLinearGradient(0, bumpTop, 0, ySill);
+    bg2.addColorStop(0, shade(body, -30));
+    bg2.addColorStop(1, shade(body, -55));
+    ctx.fillStyle = bg2;
+    roundRect(cx - sillHalf * 1.02, bumpTop, sillHalf * 2.04, (ySill - bumpTop), w * 0.04); ctx.fill();
+    // difüzör (siyah, dikey kanatlar)
+    ctx.fillStyle = '#15171b';
+    roundRect(cx - sillHalf * 0.5, ySill - h * 0.07, sillHalf, h * 0.07, w * 0.02); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.lineWidth = Math.max(0.6, w * 0.006);
+    for (let i = -2; i <= 2; i++) {
+      const dx = cx + i * sillHalf * 0.18;
+      ctx.beginPath(); ctx.moveTo(dx, ySill - h * 0.065); ctx.lineTo(dx, ySill - h * 0.008); ctx.stroke();
+    }
+    // egzoz uçları (krom)
+    const exR = w * 0.035;
+    for (const ex of [cx - sillHalf * 0.66, cx + sillHalf * 0.66]) {
+      const eg = ctx.createRadialGradient(ex - exR * 0.3, ySill - exR * 1.2, exR * 0.1, ex, ySill - exR, exR);
+      eg.addColorStop(0, '#e8edf2'); eg.addColorStop(0.6, '#9aa0a8'); eg.addColorStop(1, '#2b2e33');
+      ctx.fillStyle = eg;
+      ctx.beginPath(); ctx.ellipse(ex, ySill - exR * 0.6, exR, exR * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#0c0d10';
+      ctx.beginPath(); ctx.ellipse(ex, ySill - exR * 0.6, exR * 0.55, exR * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // ---- 9) Plaka (girintili) ----
+    ctx.fillStyle = '#15171b';
+    roundRect(cx - w * 0.15, yBumper - h * 0.02, w * 0.30, h * 0.10, w * 0.015); ctx.fill();
+    ctx.fillStyle = '#eef1e6';
+    roundRect(cx - w * 0.135, yBumper - h * 0.008, w * 0.27, h * 0.076, w * 0.012); ctx.fill();
+    ctx.fillStyle = '#2f5fae';
+    roundRect(cx - w * 0.135, yBumper - h * 0.008, w * 0.035, h * 0.076, w * 0.012); ctx.fill();
+    ctx.fillStyle = '#7a8190';
+    for (let i = 0; i < 5; i++) {
+      ctx.fillRect(cx - w * 0.08 + i * w * 0.035, yBumper + h * 0.018, w * 0.02, h * 0.04);
+    }
+  }
+
+  // Modern LED stop lambası: gövde + parlayan iç + krom çerçeve
+  function drawTailLight(lx, ly, lw, lh, color, brake, mirror) {
+    if (brake) { ctx.save(); ctx.shadowColor = '#ff2a2a'; ctx.shadowBlur = lw * 0.35; }
+    // dış kasa (koyu)
+    ctx.fillStyle = '#1c1216';
+    roundRect(lx, ly, lw, lh, lh * 0.35); ctx.fill();
+    // kırmızı lens (gradyan)
+    const lg = ctx.createLinearGradient(0, ly, 0, ly + lh);
+    lg.addColorStop(0, shade(color, brake ? 40 : 18));
+    lg.addColorStop(0.5, color);
+    lg.addColorStop(1, shade(color, -30));
+    ctx.fillStyle = lg;
+    roundRect(lx + lw * 0.06, ly + lh * 0.16, lw * 0.88, lh * 0.68, lh * 0.3); ctx.fill();
+    if (brake) ctx.restore();
+    // iç LED parıltısı (yatay çizgi)
+    ctx.fillStyle = brake ? 'rgba(255,220,210,0.9)' : 'rgba(255,160,150,0.5)';
+    roundRect(lx + lw * 0.14, ly + lh * 0.36, lw * 0.72, lh * 0.18, lh * 0.09); ctx.fill();
   }
 
   // 3B tekerlek: silindirik gövde gölgelemesi + metalik jant + bijonlar
@@ -1197,6 +1406,20 @@
     // netleşir. Böylece araçlar "bir anda" belirmez.
     ctx.save();
     ctx.globalAlpha = Math.min(1, fog * 1.15);
+
+    // Sinirli (selektör yemiş) araç gaza basınca egzoz dumanı
+    if (car.anger > 0 && width > 14) {
+      const t = performance.now() * 0.004;
+      for (let i = 0; i < 3; i++) {
+        const ph = (t + i * 0.7) % 1;
+        const px = destX + Math.sin((t + i) * 4) * width * 0.12;
+        const py = destY + width * 0.08 + ph * width * 0.4;
+        const pr = width * (0.10 + ph * 0.22);
+        ctx.fillStyle = `rgba(60,60,66,${0.32 * (1 - ph)})`;
+        ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
     drawCarSprite(destX, destY, width, car.color, shade(car.color, -34), false);
     ctx.restore();
   }
@@ -1231,6 +1454,12 @@
     if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
     const n = parseInt(hex, 16);
     return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  // İki rengi t oranında karıştır (0 = a, 1 = b)
+  function mix(a, b, t) {
+    const ca = hexToRgb(a), cb = hexToRgb(b);
+    const f = (x, y) => Math.round(x + (y - x) * t);
+    return `rgb(${f(ca.r, cb.r)},${f(ca.g, cb.g)},${f(ca.b, cb.b)})`;
   }
 
   // --------------------------- Döngü ----------------------------
