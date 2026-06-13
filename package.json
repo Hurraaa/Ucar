@@ -1,0 +1,15 @@
+{
+  "name": "ucar",
+  "version": "1.0.0",
+  "description": "Arabanin arkasindan goren, perspektifli (pseudo-3D) surus oyunu.",
+  "main": "game.js",
+  "scripts": {
+    "preview": "node preview.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "canvas": "^3.2.3"
+  }
+}
