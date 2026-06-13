@@ -217,19 +217,68 @@
     }
   });
 
-  // Dokunmatik kontroller
+  // Dokunmatik kontroller — TEK kapsayıcıda çoklu-dokunuş (multitouch) takibi.
+  // Her parmağı id'siyle izleyip altındaki butona eşleriz; böylece aynı anda
+  // birden fazla butona (örn. gaz + sağa) basılabilir.
+  const ctrlButtons = {};
+  document.querySelectorAll('.ctrl-btn').forEach((btn) => { ctrlButtons[btn.dataset.dir] = btn; });
+
+  function setKey(dir, v) {
+    if (!dir) return;
+    keys[dir] = v;
+    const b = ctrlButtons[dir];
+    if (b) b.classList.toggle('pressed', v);
+  }
+
+  function dirFromPoint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const btn = el && el.closest ? el.closest('.ctrl-btn') : null;
+    return btn ? btn.dataset.dir : null;
+  }
+
+  const tc = document.getElementById('touch-controls');
+  const touchDir = {}; // touch.identifier -> dir
+
+  tc.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    Audio.init();
+    for (const t of e.changedTouches) {
+      const dir = dirFromPoint(t.clientX, t.clientY);
+      if (dir) { touchDir[t.identifier] = dir; setKey(dir, true); }
+    }
+  }, { passive: false });
+
+  tc.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const prev = touchDir[t.identifier];
+      const next = dirFromPoint(t.clientX, t.clientY);
+      if (prev !== next) {
+        if (prev) setKey(prev, false);
+        if (next) { setKey(next, true); touchDir[t.identifier] = next; }
+        else delete touchDir[t.identifier];
+      }
+    }
+  }, { passive: false });
+
+  function endTouch(e) {
+    e.preventDefault();
+    for (const t of e.changedTouches) {
+      const dir = touchDir[t.identifier];
+      if (dir) { setKey(dir, false); delete touchDir[t.identifier]; }
+    }
+  }
+  tc.addEventListener('touchend', endTouch, { passive: false });
+  tc.addEventListener('touchcancel', endTouch, { passive: false });
+
+  // Masaüstü fare (tek işaretçi)
   document.querySelectorAll('.ctrl-btn').forEach((btn) => {
     const dir = btn.dataset.dir;
-    const set = (v) => {
-      keys[dir] = v;
-      btn.classList.toggle('pressed', v);
-    };
-    btn.addEventListener('touchstart', (e) => { e.preventDefault(); set(true); }, { passive: false });
-    btn.addEventListener('touchend',   (e) => { e.preventDefault(); set(false); }, { passive: false });
-    btn.addEventListener('touchcancel',(e) => { e.preventDefault(); set(false); }, { passive: false });
-    btn.addEventListener('mousedown', () => set(true));
-    btn.addEventListener('mouseup', () => set(false));
-    btn.addEventListener('mouseleave', () => set(false));
+    btn.addEventListener('mousedown', (e) => { e.preventDefault(); setKey(dir, true); });
+    btn.addEventListener('mouseleave', () => setKey(dir, false));
+  });
+  window.addEventListener('mouseup', () => {
+    for (const dir in ctrlButtons) setKey(dir, false);
   });
 
   // --------------------------- Ses (WebAudio) -------------------
