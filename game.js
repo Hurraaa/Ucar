@@ -221,7 +221,8 @@
   // Her parmağı id'siyle izleyip altındaki butona eşleriz; böylece aynı anda
   // birden fazla butona (örn. gaz + sağa) basılabilir.
   const ctrlButtons = {};
-  document.querySelectorAll('.ctrl-btn').forEach((btn) => { ctrlButtons[btn.dataset.dir] = btn; });
+  const ctrlList = Array.from(document.querySelectorAll('.ctrl-btn'));
+  ctrlList.forEach((btn) => { ctrlButtons[btn.dataset.dir] = btn; });
 
   function setKey(dir, v) {
     if (!dir) return;
@@ -230,10 +231,23 @@
     if (b) b.classList.toggle('pressed', v);
   }
 
+  // Dokunma noktasını bir butona eşle. Doğrudan üstünde değilse, çevresinde
+  // bir tolerans (görünmez halo) ile EN YAKIN butona sayar — böylece parmak
+  // biraz kayınca bile yön tuşu algılanır.
+  const HIT_TOL = 46;
   function dirFromPoint(x, y) {
     const el = document.elementFromPoint(x, y);
-    const btn = el && el.closest ? el.closest('.ctrl-btn') : null;
-    return btn ? btn.dataset.dir : null;
+    const direct = el && el.closest ? el.closest('.ctrl-btn') : null;
+    if (direct) return direct.dataset.dir;
+    let best = null, bestD = Infinity;
+    for (const b of ctrlList) {
+      const r = b.getBoundingClientRect();
+      const dx = x < r.left ? r.left - x : (x > r.right ? x - r.right : 0);
+      const dy = y < r.top ? r.top - y : (y > r.bottom ? y - r.bottom : 0);
+      const d = Math.hypot(dx, dy);
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return (best && bestD <= HIT_TOL) ? best.dataset.dir : null;
   }
 
   const tc = document.getElementById('touch-controls');
@@ -487,8 +501,8 @@
     else if (keys.brake) player.speed += BRAKE * dt;
     else player.speed += DECEL * dt;
 
-    // Şerit değişimi (yumuşak, yol takipli)
-    const laneStep = 1.5 * dt * (0.4 + player.speed / effMax);
+    // Şerit değişimi — düşük hızda da çabuk tepki versin (daha duyarlı direksiyon)
+    const laneStep = 2.4 * dt * (0.55 + 0.45 * (player.speed / effMax));
     if (keys.left)  player.x -= laneStep;
     if (keys.right) player.x += laneStep;
 

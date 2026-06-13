@@ -134,8 +134,8 @@ html, body {
   -webkit-appearance: none;
   border: none;
   position: relative;
-  width: 72px; height: 72px;
-  border-radius: 22px;
+  width: 86px; height: 86px;
+  border-radius: 24px;
   display: grid; place-items: center;
   color: #fff;
   cursor: pointer;
@@ -153,7 +153,7 @@ html, body {
   transition: transform .08s ease, box-shadow .12s ease, filter .12s ease;
   touch-action: none;
 }
-.ctrl-btn svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ctrl-btn svg { width: 38px; height: 38px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .ctrl-btn span { margin-top: 1px; }
 .ctrl-btn.pressed { transform: translateY(3px) scale(0.97); box-shadow: 0 3px 10px rgba(0,0,0,0.5), inset 0 2px 6px rgba(0,0,0,0.5); filter: brightness(1.15); }
 
@@ -169,10 +169,13 @@ html, body {
     linear-gradient(180deg, #ff5a5f, #b32028);
   box-shadow: 0 12px 26px rgba(179,32,40,0.5), inset 0 2px 1px rgba(255,255,255,0.32), inset 0 -4px 8px rgba(0,0,0,0.35);
 }
-.ctrl-gas, .ctrl-brake { width: 84px; height: 84px; }
+.ctrl-gas, .ctrl-brake { width: 96px; height: 96px; }
 
-.drive-pad { display: flex; gap: 14px; }
-.pedals { display: flex; gap: 14px; }
+/* Yön tuşları başparmakla daha rahat bassın diye geniş ve birbirinden ayrık */
+.ctrl-left, .ctrl-right { width: 96px; height: 96px; }
+
+.drive-pad { display: flex; gap: 18px; }
+.pedals { display: flex; gap: 18px; }
 
 /* --------------------------- Overlay --------------------------- */
 .overlay {
@@ -334,8 +337,9 @@ html, body {
 
 @media (max-width: 380px) {
   .logo { font-size: 44px; }
-  .ctrl-btn { width: 64px; height: 64px; }
-  .ctrl-gas, .ctrl-brake { width: 74px; height: 74px; }
+  .ctrl-btn { width: 78px; height: 78px; }
+  .ctrl-gas, .ctrl-brake, .ctrl-left, .ctrl-right { width: 84px; height: 84px; }
+  .drive-pad, .pedals { gap: 14px; }
 }
 
 /* Masaüstünde dokunmatik kontrolleri gizleme seçeneği yok — her ikisi de çalışır */
