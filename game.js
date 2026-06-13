@@ -789,6 +789,15 @@
     // Bulutlar
     drawClouds(horizon);
 
+    // Zemin tabanı: ufkun ALTINI da tamamen doldur.
+    // Böylece gökyüzü (0..horizon) + zemin (horizon..H) birlikte tüm ekranı
+    // her karede yeniden boyar ve geçilen yolun izi (hayalet) kalmaz.
+    const grd = ctx.createLinearGradient(0, horizon, 0, H);
+    grd.addColorStop(0, '#3f9a4a');
+    grd.addColorStop(1, '#2c7536');
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, horizon - 1, W, H - horizon + 2);
+
     // Dağlar (iki katman, parallax + kar tepeleri)
     drawMountainLayer(mountains.far, horizon, H * 0.20, '#5b7aa8', '#7d96bd', bgOffset * 8, false);
     drawMountainLayer(mountains.near, horizon, H * 0.30, '#3f5d8a', '#557099', bgOffset * 16, true);
