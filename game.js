@@ -49,10 +49,10 @@
   const COL = {
     skyTop: '#2a5db0', skyMid: '#6aa6e6', skyLow: '#bfe0f5',
     sun: '#fff4d6',
-    light: { road: '#6b6f7a', grass: '#3fa34d', rumble: '#e8e8ee', lane: '#f4f4f8' },
-    dark:  { road: '#62666f', grass: '#379145', rumble: '#c33b3b', lane: '#62666f' },
-    start: { road: '#dddddd', grass: '#3fa34d', rumble: '#dddddd', lane: '#dddddd' },
-    finish:{ road: '#222', grass: '#3fa34d', rumble: '#222', lane: '#222' },
+    light: { road: '#73767f', grass: '#46ab53', soil: '#9c7a4d', rumble: '#eef0f4', lane: '#f4f4f8' },
+    dark:  { road: '#6b6e77', grass: '#3c9a47', soil: '#8f6f44', rumble: '#cf3a3a', lane: '#6b6e77' },
+    start: { road: '#d8d8d8', grass: '#46ab53', soil: '#9c7a4d', rumble: '#d8d8d8', lane: '#d8d8d8' },
+    finish:{ road: '#222',    grass: '#46ab53', soil: '#9c7a4d', rumble: '#222',    lane: '#222' },
     fog: '#cfe6f2'
   };
 
@@ -145,10 +145,11 @@
   function placeTraffic(R) {
     traffic = [];
     const total = segments.length;
-    let z = 80;
-    const gap = Math.max(7, 26 / trafficDensity); // yoğunluk arttıkça aralık daralır
-    while (z < total - 40) {
-      z += Math.max(6, Math.floor((12 + R() * gap)));
+    let z = 120;
+    // Çok daha seyrek: araçlar arası geniş boşluk (yoğunlukla bir miktar azalır)
+    const gap = Math.max(55, 130 / trafficDensity);
+    while (z < total - 60) {
+      z += Math.floor(gap * (0.7 + R() * 0.6));
       const lane = Math.floor(R() * LANES); // 0..LANES-1
       traffic.push({
         seg: z % total,
@@ -405,7 +406,7 @@
     laps++;
     level++;
     speedBoost = Math.min(1.8, 1 + laps * 0.12);
-    trafficDensity = Math.min(3.2, 1 + laps * 0.35);
+    trafficDensity = Math.min(2.0, 1 + laps * 0.18);
     updateLevelHud();
     Audio.level();
     // Yolu yeni yoğunlukla yeniden kur (oyuncu konumunu koru)
@@ -648,26 +649,41 @@
   function drawSegment(seg, fog) {
     const p1 = seg.p1.screen, p2 = seg.p2.screen;
     const c = seg.color;
+    const group = Math.floor(seg.index / RUMBLE_LEN) % 2;
 
-    // Çimen (tüm genişlik)
+    // Çimen (tüm genişlik, hafif şeritli ton)
     ctx.fillStyle = c.grass;
     ctx.fillRect(0, p2.y, W, p1.y - p2.y + 1);
 
-    // Kenar şeritleri (rumble)
-    const r1 = p1.w / 3.4, r2 = p2.w / 3.4;
+    // Toprak banket (yol ile çimen arası geçiş)
+    const s1 = p1.w / 2.4, s2 = p2.w / 2.4;
+    polygon(p1.x - p1.w - s1, p1.y, p1.x - p1.w, p1.y, p2.x - p2.w, p2.y, p2.x - p2.w - s2, p2.y, c.soil);
+    polygon(p1.x + p1.w + s1, p1.y, p1.x + p1.w, p1.y, p2.x + p2.w, p2.y, p2.x + p2.w + s2, p2.y, c.soil);
+
+    // Kenar bordürü (kırmızı/beyaz rumble)
+    const r1 = p1.w / 4.5, r2 = p2.w / 4.5;
     polygon(p1.x - p1.w - r1, p1.y, p1.x - p1.w, p1.y, p2.x - p2.w, p2.y, p2.x - p2.w - r2, p2.y, c.rumble);
     polygon(p1.x + p1.w + r1, p1.y, p1.x + p1.w, p1.y, p2.x + p2.w, p2.y, p2.x + p2.w + r2, p2.y, c.rumble);
 
     // Yol asfaltı
     polygon(p1.x - p1.w, p1.y, p1.x + p1.w, p1.y, p2.x + p2.w, p2.y, p2.x - p2.w, p2.y, c.road);
 
-    // Şerit çizgileri (3 şerit -> 2 ayraç)
     if (c.lane !== c.road) {
-      const lw1 = p1.w / 26, lw2 = p2.w / 26;
-      for (let i = 1; i < LANES; i++) {
-        const lx1 = p1.x - p1.w + (2 * p1.w) * (i / LANES);
-        const lx2 = p2.x - p2.w + (2 * p2.w) * (i / LANES);
-        polygon(lx1 - lw1, p1.y, lx1 + lw1, p1.y, lx2 + lw2, p2.y, lx2 - lw2, p2.y, c.lane);
+      // Kenar (devamlı beyaz) çizgiler — yolun iç kenarında
+      const ew1 = p1.w * 0.028, ew2 = p2.w * 0.028;
+      const ei1 = p1.w * 0.93, ei2 = p2.w * 0.93;
+      const edge = '#eef1f6';
+      polygon(p1.x - ei1 - ew1, p1.y, p1.x - ei1 + ew1, p1.y, p2.x - ei2 + ew2, p2.y, p2.x - ei2 - ew2, p2.y, edge);
+      polygon(p1.x + ei1 - ew1, p1.y, p1.x + ei1 + ew1, p1.y, p2.x + ei2 + ew2, p2.y, p2.x + ei2 - ew2, p2.y, edge);
+
+      // Kesik (dashed) orta şerit ayraçları — sadece her ikinci grupta çiz
+      if (group === 0) {
+        const lw1 = p1.w * 0.022, lw2 = p2.w * 0.022;
+        for (let i = 1; i < LANES; i++) {
+          const lx1 = p1.x - p1.w + (2 * p1.w) * (i / LANES);
+          const lx2 = p2.x - p2.w + (2 * p2.w) * (i / LANES);
+          polygon(lx1 - lw1, p1.y, lx1 + lw1, p1.y, lx2 + lw2, p2.y, lx2 - lw2, p2.y, '#f2f3d8');
+        }
       }
     }
 
@@ -810,11 +826,11 @@
     ctx.fill();
     ctx.restore();
 
-    // Tekerlekler
-    const tireW = w * 0.16, tireH = h * 0.34;
-    ctx.fillStyle = '#15171c';
-    roundRect(x - tireW * 0.2, y + h * 0.52, tireW, tireH, 4); ctx.fill();
-    roundRect(x + w - tireW * 0.8, y + h * 0.52, tireW, tireH, 4); ctx.fill();
+    // Tekerlekler (3B: silindirik gölgeleme + metalik jant)
+    const tireW = w * 0.19, tireH = h * 0.40;
+    const tireY = y + h * 0.50;
+    drawWheel(x - tireW * 0.30, tireY, tireW, tireH);
+    drawWheel(x + w - tireW * 0.70, tireY, tireW, tireH);
 
     // Alt gövde gölgesi
     ctx.fillStyle = accent;
@@ -869,6 +885,64 @@
     // Plaka
     ctx.fillStyle = '#eef1e0';
     roundRect(cx - w * 0.14, y + h * 0.80, w * 0.28, h * 0.08, 2); ctx.fill();
+  }
+
+  // 3B tekerlek: silindirik gövde gölgelemesi + metalik jant + bijonlar
+  function drawWheel(wx, wy, ww, wh) {
+    const r = Math.min(ww, wh) * 0.5;
+    const ccx = wx + ww / 2, ccy = wy + wh / 2;
+
+    // Zemin teması (kontak gölgesi)
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(ccx, wy + wh * 0.98, ww * 0.62, wh * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Lastik gövdesi — yatay gradyan ile silindirik hacim
+    const tg = ctx.createLinearGradient(wx, 0, wx + ww, 0);
+    tg.addColorStop(0, '#000');
+    tg.addColorStop(0.18, '#2c2f36');
+    tg.addColorStop(0.45, '#3a3e46');
+    tg.addColorStop(0.62, '#23262c');
+    tg.addColorStop(1, '#050608');
+    ctx.fillStyle = tg;
+    roundRect(wx, wy, ww, wh, Math.min(ww, wh) * 0.42); ctx.fill();
+
+    // Üst sırt parlaması (lastik omuzu)
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    roundRect(wx + ww * 0.18, wy + wh * 0.04, ww * 0.5, wh * 0.10, ww * 0.2); ctx.fill();
+
+    // Lastik dişleri (ince yatay çizgiler)
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = Math.max(0.6, ww * 0.04);
+    for (let i = 1; i <= 3; i++) {
+      const ly = wy + wh * (0.2 + i * 0.18);
+      ctx.beginPath(); ctx.moveTo(wx + ww * 0.12, ly); ctx.lineTo(wx + ww * 0.88, ly); ctx.stroke();
+    }
+
+    // Metalik jant (radyal gradyan disk)
+    const hubR = r * 0.62;
+    const rim = ctx.createRadialGradient(ccx - hubR * 0.3, ccy - hubR * 0.3, hubR * 0.1, ccx, ccy, hubR);
+    rim.addColorStop(0, '#f2f4f7');
+    rim.addColorStop(0.45, '#b9c0c9');
+    rim.addColorStop(0.8, '#7c828c');
+    rim.addColorStop(1, '#3c4047');
+    ctx.fillStyle = rim;
+    ctx.beginPath(); ctx.ellipse(ccx, ccy, hubR * 0.78, hubR, 0, 0, Math.PI * 2); ctx.fill();
+
+    // Jant göbeği + bijonlar
+    ctx.fillStyle = '#5a5f68';
+    ctx.beginPath(); ctx.ellipse(ccx, ccy, hubR * 0.34, hubR * 0.44, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2b2e34';
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+      const bx = ccx + Math.cos(a) * hubR * 0.5;
+      const by = ccy + Math.sin(a) * hubR * 0.62;
+      ctx.beginPath(); ctx.arc(bx, by, Math.max(0.8, hubR * 0.1), 0, Math.PI * 2); ctx.fill();
+    }
+    // Göbek parlaması
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.ellipse(ccx - hubR * 0.22, ccy - hubR * 0.26, hubR * 0.12, hubR * 0.16, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   function drawLamp(x, y, w, h, color, glow) {
