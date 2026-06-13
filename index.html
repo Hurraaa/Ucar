@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Ucar — Sonsuz Yol</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game-shell">
+    <canvas id="game"></canvas>
+
+    <!-- Üst HUD -->
+    <div id="hud" class="hud">
+      <div class="hud-card">
+        <span class="hud-label">SKOR</span>
+        <span id="score" class="hud-value">0</span>
+      </div>
+      <div class="hud-card">
+        <span class="hud-label">EN İYİ</span>
+        <span id="best" class="hud-value">0</span>
+      </div>
+      <div class="hud-card speed-card">
+        <span class="hud-label">HIZ</span>
+        <span id="speed" class="hud-value">0<small>km/s</small></span>
+      </div>
+    </div>
+
+    <!-- Mobil kontrol butonları -->
+    <div id="touch-controls" class="touch-controls">
+      <div class="drive-pad">
+        <button class="ctrl-btn ctrl-left" data-dir="left" aria-label="Sola">
+          <svg viewBox="0 0 24 24"><path d="M15 4l-8 8 8 8" /></svg>
+        </button>
+        <button class="ctrl-btn ctrl-right" data-dir="right" aria-label="Sağa">
+          <svg viewBox="0 0 24 24"><path d="M9 4l8 8-8 8" /></svg>
+        </button>
+      </div>
+      <div class="pedals">
+        <button class="ctrl-btn ctrl-brake" data-dir="brake" aria-label="Fren">
+          <svg viewBox="0 0 24 24"><path d="M12 20V4M5 13l7 7 7-7" /></svg>
+          <span>FREN</span>
+        </button>
+        <button class="ctrl-btn ctrl-gas" data-dir="gas" aria-label="Gaz">
+          <svg viewBox="0 0 24 24"><path d="M12 4v16M5 11l7-7 7 7" /></svg>
+          <span>GAZ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Başlangıç / Menü ekranı -->
+    <div id="overlay" class="overlay">
+      <div class="panel">
+        <div class="logo">
+          <span class="logo-u">U</span><span class="logo-rest">CAR</span>
+          <span class="logo-sub">SONSUZ YOL</span>
+        </div>
+        <p class="tagline">Arabanı sür, trafiği geç, en uzağa git.</p>
+
+        <div class="car-picker">
+          <span class="picker-title">ARABANI SEÇ</span>
+          <div class="swatches" id="swatches"></div>
+        </div>
+
+        <button id="play-btn" class="btn btn-primary">
+          <span class="btn-shine"></span>
+          <span class="btn-label">OYNA</span>
+        </button>
+
+        <div class="hint-row">
+          <span class="key">◀ ▶</span> / <span class="key">A D</span> şerit
+          &nbsp;•&nbsp; <span class="key">▲</span> gaz &nbsp;•&nbsp; <span class="key">▼</span> fren
+        </div>
+      </div>
+    </div>
+
+    <!-- Oyun bitti ekranı -->
+    <div id="gameover" class="overlay hidden">
+      <div class="panel">
+        <div class="go-title">ÇARPIŞMA!</div>
+        <div class="go-stats">
+          <div><span class="go-stat-label">SKOR</span><span id="go-score" class="go-stat-value">0</span></div>
+          <div><span class="go-stat-label">EN İYİ</span><span id="go-best" class="go-stat-value">0</span></div>
+        </div>
+        <button id="retry-btn" class="btn btn-primary">
+          <span class="btn-shine"></span>
+          <span class="btn-label">TEKRAR DENE</span>
+        </button>
+        <button id="menu-btn" class="btn btn-ghost">
+          <span class="btn-label">MENÜ</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Duraklat butonu -->
+    <button id="pause-btn" class="pause-btn" aria-label="Duraklat">
+      <svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+    </button>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

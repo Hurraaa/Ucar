@@ -1,0 +1,341 @@
+/* ============================================================
+   UCAR — Sonsuz Yol  ·  Arayüz Stilleri
+   Profesyonel butonlar, gölgeler, derinlikli HUD
+   ============================================================ */
+
+:root {
+  --accent: #ff7a18;
+  --accent-2: #ffb347;
+  --accent-glow: rgba(255, 122, 24, 0.55);
+  --ink: #0b1020;
+  --ink-2: #141a30;
+  --glass: rgba(18, 24, 46, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.12);
+  --text: #f4f7ff;
+  --text-dim: #9fb0d0;
+  --font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  width: 100%; height: 100%;
+  background: #05070f;
+  font-family: var(--font);
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+#game-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 120% at 50% 0%, #16213e 0%, #05070f 70%);
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+  box-shadow: inset 0 0 180px rgba(0,0,0,0.55);
+}
+
+/* ----------------------------- HUD ----------------------------- */
+.hud {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.hud-card {
+  min-width: 78px;
+  padding: 8px 14px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.hud-label {
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.hud-value {
+  font-size: 22px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+}
+
+.hud-value small { font-size: 10px; font-weight: 600; color: var(--text-dim); margin-left: 2px; }
+
+.speed-card .hud-value { color: var(--accent-2); }
+
+/* ----------------------- Duraklat butonu ----------------------- */
+.pause-btn {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  right: max(14px, env(safe-area-inset-right));
+  width: 46px; height: 46px;
+  z-index: 21;
+  border: 1px solid var(--glass-line);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
+  border-radius: 13px;
+  color: var(--text);
+  display: grid; place-items: center;
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.4);
+  transition: transform .12s ease, background .2s ease;
+}
+.pause-btn:active { transform: scale(0.92); }
+.pause-btn svg { width: 22px; height: 22px; fill: currentColor; }
+.pause-btn.hidden { display: none; }
+
+/* ------------------- Mobil kontrol butonları ------------------- */
+.touch-controls {
+  position: absolute;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  left: 0; right: 0;
+  z-index: 20;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 max(18px, env(safe-area-inset-left)) 0 max(18px, env(safe-area-inset-right));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease;
+}
+.touch-controls.active { opacity: 1; pointer-events: auto; }
+
+.ctrl-btn {
+  -webkit-appearance: none;
+  border: none;
+  position: relative;
+  width: 72px; height: 72px;
+  border-radius: 22px;
+  display: grid; place-items: center;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 1px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 45%),
+    linear-gradient(180deg, #2a3358, #131a33);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow:
+    0 10px 22px rgba(0,0,0,0.5),
+    inset 0 2px 1px rgba(255,255,255,0.22),
+    inset 0 -4px 8px rgba(0,0,0,0.4);
+  transition: transform .08s ease, box-shadow .12s ease, filter .12s ease;
+  touch-action: none;
+}
+.ctrl-btn svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.ctrl-btn span { margin-top: 1px; }
+.ctrl-btn.pressed { transform: translateY(3px) scale(0.97); box-shadow: 0 3px 10px rgba(0,0,0,0.5), inset 0 2px 6px rgba(0,0,0,0.5); filter: brightness(1.15); }
+
+.ctrl-gas {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0) 45%),
+    linear-gradient(180deg, #36d07a, #138a4a);
+  box-shadow: 0 12px 26px rgba(19,138,74,0.5), inset 0 2px 1px rgba(255,255,255,0.35), inset 0 -4px 8px rgba(0,0,0,0.35);
+}
+.ctrl-brake {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0) 45%),
+    linear-gradient(180deg, #ff5a5f, #b32028);
+  box-shadow: 0 12px 26px rgba(179,32,40,0.5), inset 0 2px 1px rgba(255,255,255,0.32), inset 0 -4px 8px rgba(0,0,0,0.35);
+}
+.ctrl-gas, .ctrl-brake { width: 84px; height: 84px; }
+
+.drive-pad { display: flex; gap: 14px; }
+.pedals { display: flex; gap: 14px; }
+
+/* --------------------------- Overlay --------------------------- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(120% 90% at 50% 30%, rgba(8,12,28,0.55), rgba(4,6,15,0.92));
+  backdrop-filter: blur(3px);
+  animation: fadeIn .35s ease;
+}
+.overlay.hidden { display: none; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.panel {
+  width: min(420px, 92vw);
+  padding: 34px 30px 28px;
+  border-radius: 28px;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(28,34,62,0.92), rgba(14,18,38,0.95));
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow:
+    0 30px 70px rgba(0,0,0,0.6),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+  animation: pop .4s cubic-bezier(.18,.9,.3,1.2);
+}
+@keyframes pop { from { transform: translateY(14px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Logo */
+.logo {
+  font-size: 52px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  line-height: 1;
+  position: relative;
+  display: inline-block;
+}
+.logo-u {
+  color: var(--accent);
+  text-shadow: 0 0 22px var(--accent-glow);
+}
+.logo-rest { color: var(--text); }
+.logo-sub {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 8px;
+  margin-top: 6px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.tagline { margin: 14px 0 22px; color: var(--text-dim); font-size: 14px; }
+
+/* Araba seçici */
+.car-picker { margin-bottom: 24px; }
+.picker-title { font-size: 11px; letter-spacing: 3px; color: var(--text-dim); font-weight: 700; }
+.swatches { display: flex; gap: 12px; justify-content: center; margin-top: 12px; }
+.swatch {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 3px solid rgba(255,255,255,0.18);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4), inset 0 -6px 10px rgba(0,0,0,0.3), inset 0 4px 6px rgba(255,255,255,0.35);
+  transition: transform .15s ease, border-color .15s ease;
+}
+.swatch:hover { transform: translateY(-3px) scale(1.06); }
+.swatch.selected { border-color: #fff; transform: scale(1.12); box-shadow: 0 0 0 2px var(--accent), 0 8px 18px rgba(0,0,0,0.5); }
+
+/* --------------------- PROFESYONEL BUTONLAR -------------------- */
+.btn {
+  position: relative;
+  width: 100%;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: #fff;
+  padding: 17px 24px;
+  border-radius: 18px;
+  overflow: hidden;
+  transition: transform .1s ease, box-shadow .18s ease, filter .18s ease;
+  isolation: isolate;
+}
+.btn .btn-label { position: relative; z-index: 2; }
+
+.btn-primary {
+  background: linear-gradient(180deg, var(--accent-2) 0%, var(--accent) 55%, #e85d00 100%);
+  box-shadow:
+    0 14px 30px var(--accent-glow),
+    inset 0 2px 0 rgba(255,255,255,0.5),
+    inset 0 -5px 12px rgba(150,50,0,0.6);
+  text-shadow: 0 1px 2px rgba(120,40,0,0.5);
+}
+.btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(2px); box-shadow: 0 6px 14px var(--accent-glow), inset 0 2px 6px rgba(150,50,0,0.6); }
+
+/* Buton parlama animasyonu */
+.btn-shine {
+  position: absolute;
+  top: 0; left: -120%;
+  width: 60%; height: 100%;
+  z-index: 1;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,0.55), transparent);
+  transform: skewX(-20deg);
+  animation: shine 3.2s ease-in-out infinite;
+}
+@keyframes shine { 0%, 60% { left: -120%; } 100% { left: 160%; } }
+
+.btn-ghost {
+  margin-top: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.1);
+  font-size: 15px;
+}
+.btn-ghost:hover { background: rgba(255,255,255,0.12); }
+.btn-ghost:active { transform: translateY(2px); }
+
+.hint-row {
+  margin-top: 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.key {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-bottom-width: 2px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* Oyun bitti */
+.go-title {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: #ff5a5f;
+  text-shadow: 0 0 24px rgba(255,90,95,0.5);
+  margin-bottom: 20px;
+}
+.go-stats { display: flex; gap: 16px; justify-content: center; margin-bottom: 26px; }
+.go-stats > div {
+  flex: 1;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.go-stat-label { display: block; font-size: 11px; letter-spacing: 2px; color: var(--text-dim); font-weight: 700; }
+.go-stat-value { display: block; font-size: 30px; font-weight: 900; font-variant-numeric: tabular-nums; margin-top: 4px; }
+
+@media (max-width: 380px) {
+  .logo { font-size: 44px; }
+  .ctrl-btn { width: 64px; height: 64px; }
+  .ctrl-gas, .ctrl-brake { width: 74px; height: 74px; }
+}
+
+/* Masaüstünde dokunmatik kontrolleri gizleme seçeneği yok — her ikisi de çalışır */
+@media (hover: none) and (pointer: coarse) {
+  .hint-row { display: none; }
+}
