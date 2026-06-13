@@ -177,12 +177,14 @@ html, body {
 .drive-pad { display: flex; gap: 18px; }
 .pedals { display: flex; gap: 18px; }
 
-/* Selektör butonu (ortada) */
+/* Selektör butonu — sol direksiyon kümesinin hemen üstünde (kolay erişim) */
 .flash-btn {
-  align-self: center;
+  position: absolute;
+  left: calc(max(18px, env(safe-area-inset-left)) + 14px);
+  bottom: calc(max(20px, env(safe-area-inset-bottom)) + 126px);
   -webkit-appearance: none;
   border: 1px solid rgba(255,255,255,0.18);
-  width: 70px; height: 70px;
+  width: 80px; height: 80px;
   border-radius: 50%;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px;
