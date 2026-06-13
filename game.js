@@ -35,7 +35,7 @@
   const FOV = 100;
   const CAM_HEIGHT = 1000;
   const CAM_DEPTH = 1 / Math.tan((FOV / 2) * Math.PI / 180);
-  const DRAW_DIST = 240;        // kaç segment çizilecek
+  const DRAW_DIST = 300;        // kaç segment çizilecek (uzağı görmek için)
   const FOG_DENSITY = 5;
 
   const MAX_SPEED = SEG_LEN * 60;       // birim/sn
@@ -70,7 +70,7 @@
       curve: curve,
       p1: { world: { x: 0, y: prevY, z: n * SEG_LEN }, camera: {}, screen: {} },
       p2: { world: { x: 0, y: y,   z: (n + 1) * SEG_LEN }, camera: {}, screen: {} },
-      cars: [],
+      scn: [], coinz: [],
       color: Math.floor(n / RUMBLE_LEN) % 2 ? COL.dark : COL.light
     });
   }
@@ -108,6 +108,30 @@
     trackLength = segments.length * SEG_LEN;
     placeTraffic(R);
     placeCoins(R);
+    placeScenery(R);
+  }
+
+  // Yol kenarı manzara: ağaç, çalı, kaya — geçtikçe derinlik ve hız hissi verir
+  let scenery = [];
+  function placeScenery(R) {
+    scenery = [];
+    const total = segments.length;
+    for (let i = 8; i < total - 4; i++) {
+      if (R() < 0.12) {
+        const side = R() < 0.5 ? -1 : 1;
+        const t = R();
+        const type = t < 0.62 ? 'tree' : (t < 0.86 ? 'bush' : 'rock');
+        const obj = {
+          seg: i, side,
+          dist: 1.35 + R() * 1.7,      // yol kenarından uzaklık (p.w katı)
+          h: 0.85 + R() * 0.7,         // boy çarpanı
+          tint: R(),                   // yeşil ton varyasyonu
+          z: i * SEG_LEN, type
+        };
+        scenery.push(obj);
+        segments[i].scn.push(obj);
+      }
+    }
   }
 
   // Yol boyunca toplanabilir altınlar (şerit üzerinde dizili)
@@ -122,7 +146,10 @@
       // küçük zincirler halinde 1-4 altın
       const chain = 1 + Math.floor(R() * 4);
       for (let k = 0; k < chain && z + k < total - 30; k++) {
-        coins.push({ seg: (z + k) % total, offset: laneToOffset(lane), z: ((z + k) % total) * SEG_LEN, taken: false });
+        const idx = (z + k) % total;
+        const coin = { seg: idx, offset: laneToOffset(lane), z: idx * SEG_LEN, taken: false };
+        coins.push(coin);
+        segments[idx].coinz.push(coin);
       }
       z += chain;
     }
@@ -152,11 +179,11 @@
       z += Math.floor(gap * (0.7 + R() * 0.6));
       const lane = Math.floor(R() * LANES); // 0..LANES-1
       traffic.push({
-        seg: z % total,
         offset: laneToOffset(lane),
         lane,
         color: TRAFFIC_COLORS[Math.floor(R() * TRAFFIC_COLORS.length)],
-        speed: (0.45 + R() * 0.35), // oyuncuya göre yavaş
+        // Kendi hızı — oyuncudan yavaş, böylece yaklaşıp geçeriz
+        spd: MAX_SPEED * (0.30 + R() * 0.28),
         z: (z % total) * SEG_LEN
       });
     }
@@ -493,7 +520,6 @@
 
   // ------------------------ Güncelleme --------------------------
   function update(dt) {
-    const startPos = player.z;
     const effMax = MAX_SPEED * speedBoost;
 
     // Hızlanma / frenleme
@@ -551,7 +577,7 @@
     updateCoins();
 
     // Trafik güncelle + çarpışma
-    updateTraffic(dt, playerSeg, startPos);
+    updateTraffic(dt);
   }
 
   function updateCoins() {
@@ -570,23 +596,24 @@
     }
   }
 
-  function updateTraffic(dt, playerSeg, startPos) {
+  // Halka üzerinde en kısa işaretli mesafe
+  function wrapDelta(d) {
+    while (d > trackLength / 2) d -= trackLength;
+    while (d < -trackLength / 2) d += trackLength;
+    return d;
+  }
+
+  function updateTraffic(dt) {
     for (const car of traffic) {
-      car.z += player.speed * car.speed * dt * 0.0; // sabit kalsın, oyuncu yaklaşsın
-      // (Sabit araçlar daha net engel oluşturur)
+      // Her araç kendi hızıyla ilerler; oyuncu daha hızlı olunca yaklaşıp geçer
+      car.z += car.spd * dt;
+      if (car.z >= trackLength) car.z -= trackLength;
     }
-    // Çarpışma kontrolü: oyuncunun geçtiği aralıkta
-    const pSeg = Math.floor(player.z / SEG_LEN);
+    // Çarpışma: oyuncuya göre boyuna ve yanal örtüşme
     for (const car of traffic) {
-      const cSeg = Math.floor(car.z / SEG_LEN);
-      const diff = (cSeg - pSeg + segments.length) % segments.length;
-      if (diff <= 2) {
-        // yatay çakışma?
-        const carX = car.offset;
-        if (Math.abs(player.x - carX) < 0.42) {
-          // çarpışma
-          if (player.speed > MAX_SPEED * 0.08) { gameOver(); return; }
-        }
+      const dz = wrapDelta(car.z - player.z);
+      if (Math.abs(dz) < SEG_LEN * 1.4 && Math.abs(player.x - car.offset) < 0.42) {
+        if (player.speed > MAX_SPEED * 0.08) { gameOver(); return; }
       }
     }
   }
@@ -630,17 +657,15 @@
       maxy = seg.p2.screen.y;
     }
 
-    // Altınlar + araçlar (uzaktan yakına çiz)
+    // Manzara + altın + araçlar (uzaktan yakına çiz)
     for (let n = visible.length - 1; n >= 0; n--) {
       const seg = visible[n];
-      for (const c of coins) {
-        if (!c.taken && Math.floor(c.z / SEG_LEN) % segments.length === seg.index) {
-          drawCoin(seg, c, seg._visible.fog);
-        }
-      }
+      const fog = seg._visible.fog;
+      for (const obj of seg.scn) drawScenery(seg, obj, fog);
+      for (const c of seg.coinz) { if (!c.taken) drawCoin(seg, c, fog); }
       for (const car of traffic) {
         if (Math.floor(car.z / SEG_LEN) % segments.length === seg.index) {
-          drawTrafficCar(seg, car, seg._visible.fog);
+          drawTrafficCar(seg, car, fog);
         }
       }
     }
@@ -651,8 +676,108 @@
     // Toplama efektleri (yüzen yazı)
     drawPops();
 
+    // Yüksek hızda hız çizgileri
+    drawSpeedLines(player.speed / MAX_SPEED);
+
     // Vinyet
     drawVignette();
+  }
+
+  function drawSpeedLines(pct) {
+    if (pct < 0.5) return;
+    const a = Math.min(1, (pct - 0.5) / 0.5);
+    const cx = W / 2, cy = H * 0.5;
+    const t = performance.now() * 0.018;
+    ctx.save();
+    ctx.globalAlpha = a * 0.45;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 16; i++) {
+      const ang = (i / 16) * Math.PI * 2 + (i % 2 ? 0.12 : 0);
+      const ph = (Math.sin(t * 3 + i * 1.7) * 0.5 + 0.5);
+      const r1 = H * (0.26 + ph * 0.12);
+      const r2 = r1 + H * 0.16 * a;
+      ctx.lineWidth = Math.max(1, 2.5 * a);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(ang) * r1, cy + Math.sin(ang) * r1 * 0.82);
+      ctx.lineTo(cx + Math.cos(ang) * r2, cy + Math.sin(ang) * r2 * 0.82);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Yol kenarı nesnesi: ağaç / çalı / kaya
+  function drawScenery(seg, obj, fog) {
+    const p = seg.p1.screen;
+    if (!p.scale || p.scale <= 0 || !p.w) return;
+    const unit = p.w * 0.9;             // derinliğe göre boyut
+    if (unit < 3) return;
+    const bx = p.x + obj.side * (p.w * obj.dist);
+    const by = p.y;
+    if (bx < -unit * 3 || bx > W + unit * 3) return;
+
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, fog * 1.15);
+
+    // Zemin gölgesi (hepsi için)
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(bx, by, unit * 0.4, unit * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+
+    if (obj.type === 'tree') {
+      const th = unit * (1.3 * obj.h);          // ağaç boyu
+      const trunkW = unit * 0.14;
+      // gövde
+      const tg = ctx.createLinearGradient(bx - trunkW, 0, bx + trunkW, 0);
+      tg.addColorStop(0, '#5a3b21'); tg.addColorStop(0.5, '#7a5230'); tg.addColorStop(1, '#3f2815');
+      ctx.fillStyle = tg;
+      roundRect(bx - trunkW / 2, by - th * 0.42, trunkW, th * 0.42, trunkW * 0.3); ctx.fill();
+      // yaprak kümeleri (3 daire, gradyanlı)
+      const green1 = obj.tint < 0.5 ? '#2f7d33' : '#3c8f3a';
+      const green2 = obj.tint < 0.5 ? '#1f5a25' : '#276b28';
+      const cy = by - th * 0.62, cr = unit * 0.5;
+      const blob = (ox, oy, r) => {
+        const fg = ctx.createRadialGradient(bx + ox - r * 0.3, cy + oy - r * 0.3, r * 0.1, bx + ox, cy + oy, r);
+        fg.addColorStop(0, green1); fg.addColorStop(1, green2);
+        ctx.fillStyle = fg;
+        ctx.beginPath(); ctx.arc(bx + ox, cy + oy, r, 0, Math.PI * 2); ctx.fill();
+      };
+      blob(-cr * 0.55, cr * 0.35, cr * 0.72);
+      blob(cr * 0.55, cr * 0.35, cr * 0.72);
+      blob(0, -cr * 0.3, cr * 0.95);
+      // üst ışık
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.beginPath(); ctx.arc(bx - cr * 0.25, cy - cr * 0.5, cr * 0.3, 0, Math.PI * 2); ctx.fill();
+    } else if (obj.type === 'bush') {
+      const r = unit * 0.42 * obj.h;
+      const cy = by - r * 0.7;
+      const fg = ctx.createRadialGradient(bx - r * 0.3, cy - r * 0.3, r * 0.1, bx, cy, r * 1.2);
+      fg.addColorStop(0, '#4ca64f'); fg.addColorStop(1, '#2c6f30');
+      ctx.fillStyle = fg;
+      ctx.beginPath();
+      ctx.arc(bx - r * 0.6, cy + r * 0.2, r * 0.7, 0, Math.PI * 2);
+      ctx.arc(bx + r * 0.6, cy + r * 0.2, r * 0.7, 0, Math.PI * 2);
+      ctx.arc(bx, cy - r * 0.2, r * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+    } else { // rock
+      const r = unit * 0.34 * obj.h;
+      const cy = by - r * 0.5;
+      const rg = ctx.createLinearGradient(bx, cy - r, bx, cy + r);
+      rg.addColorStop(0, '#9aa0a6'); rg.addColorStop(1, '#5b6066');
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.moveTo(bx - r, cy + r * 0.6);
+      ctx.lineTo(bx - r * 0.5, cy - r * 0.6);
+      ctx.lineTo(bx + r * 0.3, cy - r * 0.8);
+      ctx.lineTo(bx + r, cy + r * 0.5);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
+      ctx.beginPath();
+      ctx.moveTo(bx - r * 0.5, cy - r * 0.6);
+      ctx.lineTo(bx + r * 0.3, cy - r * 0.8);
+      ctx.lineTo(bx - r * 0.1, cy - r * 0.1);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawCoin(seg, c, fog) {
@@ -662,9 +787,9 @@
     const cx = p.x + (c.offset * p.w);
     const bob = Math.sin(performance.now() * 0.005 + c.z * 0.01) * r * 0.6;
     const cy = p.y - r * 1.6 + bob;
-    if (r < 2) return;
+    if (r < 1.5) return;
     ctx.save();
-    ctx.globalAlpha = Math.max(0.2, fog);
+    ctx.globalAlpha = Math.min(1, fog * 1.15);
     // gölge
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath(); ctx.ellipse(cx, p.y, r * 0.9, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
@@ -916,6 +1041,14 @@
     ctx.fillStyle = bg;
     roundRect(x, y + h * 0.30, w, h * 0.55, w * 0.13); ctx.fill();
 
+    // Yan aynalar (gövdenin üst köşelerinde küçük çıkıntılar)
+    ctx.fillStyle = shade(body, -20);
+    roundRect(x - w * 0.06, y + h * 0.40, w * 0.10, h * 0.10, w * 0.03); ctx.fill();
+    roundRect(x + w * 0.96, y + h * 0.40, w * 0.10, h * 0.10, w * 0.03); ctx.fill();
+    ctx.fillStyle = '#3a4a5a';
+    roundRect(x - w * 0.045, y + h * 0.415, w * 0.06, h * 0.06, w * 0.02); ctx.fill();
+    roundRect(x + w * 0.985, y + h * 0.415, w * 0.06, h * 0.06, w * 0.02); ctx.fill();
+
     // Kabin / tavan
     const roofW = w * 0.74, roofX = cx - roofW / 2;
     const rg = ctx.createLinearGradient(0, y, 0, y + h * 0.4);
@@ -953,6 +1086,12 @@
     const glow = brake ? 22 : 6;
     drawLamp(x + w * 0.08, lampY, lampW, lampH, lampColor, glow);
     drawLamp(x + w * 0.72, lampY, lampW, lampH, lampColor, glow);
+
+    // Ortada LED fren çıtası (frene basınca parlar)
+    if (brake) { ctx.save(); ctx.shadowColor = '#ff2a2a'; ctx.shadowBlur = 16; }
+    ctx.fillStyle = brake ? '#ff4d4d' : '#7a1414';
+    roundRect(x + w * 0.30, y + h * 0.54, w * 0.40, h * 0.045, h * 0.02); ctx.fill();
+    if (brake) ctx.restore();
 
     // Plaka
     ctx.fillStyle = '#eef1e0';
@@ -1050,12 +1189,14 @@
     if (!p.scale || p.scale <= 0 || !p.w) return;
     // Bir araç yaklaşık 0.8 şerit genişliği = yol yarı-genişliğinin ~%55'i
     const width = p.w * 0.55;
-    if (width < 6) return;
+    if (width < 2) return;
     const destX = p.x + (car.offset * p.w);
     const destY = p.y;
 
+    // Pus + yakın kenar yumuşatması: uzakta neredeyse görünmez başlar, yaklaştıkça
+    // netleşir. Böylece araçlar "bir anda" belirmez.
     ctx.save();
-    ctx.globalAlpha = Math.max(0.15, fog);
+    ctx.globalAlpha = Math.min(1, fog * 1.15);
     drawCarSprite(destX, destY, width, car.color, shade(car.color, -34), false);
     ctx.restore();
   }
