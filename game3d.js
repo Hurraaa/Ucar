@@ -202,7 +202,7 @@
 
   // ---- Viraj & yokuş eğrileri: mesafeye göre yatay (offX) / dikey (offY) ofset ----
   // Oyuncu hep dünya merkezinde; yol etrafında kıvrılıp alçalır/yükselir.
-  const CURVE_AMP = 17, HILL_AMP = 6;
+  const CURVE_AMP = 21, HILL_AMP = 10;
   function curveX(s) { return CURVE_AMP * (Math.sin(s * 0.0021) + 0.45 * Math.sin(s * 0.00105 + 1.3)); }
   function hillY(s) { return HILL_AMP * (Math.sin(s * 0.0016) + 0.55 * Math.sin(s * 0.00072 + 0.7)); }
   function offX(z) { return curveX(dist - z) - curveX(dist); }
@@ -1192,10 +1192,12 @@
     if (nearTimer > 0) nearTimer -= dt; else nearStreak = 0;
     if (player.highBeam) angerAhead();   // basılı tutuldukça öndeki trafik tedirgin
 
+    const grade = Math.atan2(offY(-9), 9);    // + = yokuş yukarı, - = iniş
     if (keys.gas) player.speed += effMax / 4 * dt;
     else if (keys.brake) player.speed -= effMax / 1.4 * dt;
     else player.speed -= effMax / 6 * dt;
-    player.speed = Math.max(0, Math.min(player.speed, effMax));
+    player.speed -= grade * effMax * 0.7 * dt;   // yokuş yukarı zorlar/yavaşlatır, iniş hızlandırır
+    player.speed = Math.max(0, Math.min(player.speed, effMax * 1.06));
 
     // ---- Yatay hareket: yol tutuşlu/savrulmalı model ----
     // Yüksek hızda tutuş düşer; düşük grip => geç tepki + kayma (momentum kalır)
@@ -1337,13 +1339,12 @@
     RADAR.update(dt, sp);
 
     // oyuncu model güncelle
-    const bank = Math.atan2(offX(-8), 8);      // viraj eğimi
-    const pitch = Math.atan2(offY(-5), 5);     // yokuş eğimi
+    const bank = Math.atan2(offX(-9), 9);      // viraj yönü (yola göre)
     const drift = Math.max(-1, Math.min(1, player.vx / (LANE_W * 2.3)));   // kayma açısı
     player.model.position.x = player.x;
-    player.model.rotation.y = -player.steer * 0.10 - bank * 0.5 - drift * 0.32;  // burun kaymaya döner
-    player.model.rotation.z = -player.steer * 0.05 - bank * 0.3 + drift * 0.05;
-    player.model.rotation.x = -pitch * 0.8;
+    player.model.rotation.y = -player.steer * 0.10 - bank * 1.1 - drift * 0.32;  // burun yola/kaymaya döner
+    player.model.rotation.z = -player.steer * 0.06 - bank * 0.8 + drift * 0.05;  // virajda yana yatar
+    player.model.rotation.x = -grade * 1.9;                                      // yokuşta burun kalkar / inişte iner
     const wr = sp * dt / 0.46;
     for (const wgrp of player.model.userData.wheels) wgrp.children[0].rotation.x -= wr;
     // hafif zıplama
@@ -1356,12 +1357,13 @@
     flashLight.position.x = player.x;
     flashLight.intensity = player.highBeam ? 4.5 : 0;
 
-    // kamera takip (viraj ve yokuşa göre yönelir)
-    camera.position.x += ((player.x * 0.5 + offX(9) * 0.6) - camera.position.x) * Math.min(1, dt * 6);
-    camera.position.y += ((4.3 + offY(9)) - camera.position.y) * 0.12;
+    // kamera takip (viraj ve yokuşa göre belirgin yatar/eğilir)
+    const curveAng = Math.atan2(offX(-22), 22);
+    camera.position.x += ((player.x * 0.5 + offX(9) * 0.85) - camera.position.x) * Math.min(1, dt * 6);
+    camera.position.y += ((4.3 + offY(9) * 1.25) - camera.position.y) * 0.12;
     camera.position.z = 9;
-    camera.lookAt(player.x * 0.3 + offX(-16), 1.5 + offY(-16) * 0.9, -16);
-    camera.rotation.z += ((-player.steer * 0.03 - Math.atan2(offX(-20), 20) * 0.25) - camera.rotation.z) * 0.1;
+    camera.lookAt(player.x * 0.3 + offX(-20) * 1.1, 1.5 + offY(-20) * 1.3, -20);
+    camera.rotation.z += ((-player.steer * 0.04 - curveAng * 1.7) - camera.rotation.z) * 0.12;
     sun.target.position.set(player.x, 0, -6); sun.position.set(player.x - 26, 40, 18);
 
     // motor sesi
