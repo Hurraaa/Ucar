@@ -111,6 +111,19 @@ html, body {
 .pause-btn svg { width: 22px; height: 22px; fill: currentColor; }
 .pause-btn.hidden { display: none; }
 
+/* 3B toplama efekti (yüzen yazı) */
+#pop3d {
+  position: absolute;
+  left: 50%; top: 58%;
+  transform: translate(-50%, -50%);
+  font-weight: 900; font-size: 30px;
+  color: #ffd84d;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  pointer-events: none; opacity: 0;
+  z-index: 25;
+  transition: opacity .1s linear;
+}
+
 .sound-btn { right: calc(max(14px, env(safe-area-inset-right)) + 56px); }
 .sound-btn svg.hidden { display: none; }
 
