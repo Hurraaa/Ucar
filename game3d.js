@@ -204,10 +204,11 @@
   // Oyuncu hep dünya merkezinde; yol etrafında kıvrılıp alçalır/yükselir.
   // Kısa dalga boyu = hız 95'te birkaç saniyede bir belirgin viraj/tepe (hissedilir eğim).
   const CURVE_AMP = 16, HILL_AMP = 8;
+  let curveMul = 1, hillMul = 1;   // bölgeye göre yumuşatılan viraj/yokuş şiddeti
   function curveX(s) { return CURVE_AMP * (Math.sin(s * 0.0042) + 0.4 * Math.sin(s * 0.0091 + 1.3)); }
   function hillY(s) { return HILL_AMP * (Math.sin(s * 0.0072) + 0.4 * Math.sin(s * 0.015 + 0.7)); }
-  function offX(z) { return curveX(dist - z) - curveX(dist); }
-  function offY(z) { return hillY(dist - z) - hillY(dist); }
+  function offX(z) { return (curveX(dist - z) - curveX(dist)) * curveMul; }
+  function offY(z) { return (hillY(dist - z) - hillY(dist)) * hillMul; }
 
   const SEG_WORLD = 16;                    // bir doku tekrarının dünya uzunluğu
   const RIBBON_Z0 = 26, RIBBON_Z1 = -486;  // şeridin yakın/uzak ucu (viewZ)
@@ -497,33 +498,62 @@
   }
 
   // ----------------------------- Ağaç / Dağ -----------------------------
-  function buildTree() {
+  // Bölgesel bitki örtüsü malzemeleri (yeniden kullanılır)
+  const VEG = {
+    trunk: new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1 }),
+    trunkDark: new THREE.MeshStandardMaterial({ color: 0x4f3620, roughness: 1 }),
+    pine: new THREE.MeshStandardMaterial({ color: 0x2f8a3c, roughness: 1 }),
+    lush: new THREE.MeshStandardMaterial({ color: 0x1f7a2c, roughness: 1 }),
+    steppe: new THREE.MeshStandardMaterial({ color: 0x9aa24e, roughness: 1 }),
+    maki: new THREE.MeshStandardMaterial({ color: 0x6f8a52, roughness: 1 })
+  };
+  // kind: 'mixed' (Marmara çam), 'lush' (Karadeniz ulu ağaç), 'steppe' (İç Anadolu bozkır), 'maki' (Akdeniz maki)
+  function buildVeg(kind) {
     const g = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 7),
-      new THREE.MeshStandardMaterial({ color: 0x6b4a2b, roughness: 1 }));
-    trunk.position.y = 0.8; trunk.castShadow = true; g.add(trunk);
-    const leafMat = new THREE.MeshStandardMaterial({ color: 0x2f8a3c, roughness: 1 });
-    for (let i = 0; i < 3; i++) {
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.5 - i * 0.35, 1.6, 8), leafMat);
-      cone.position.y = 1.8 + i * 0.9; cone.castShadow = true; g.add(cone);
+    if (kind === 'lush') {
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.44, 2.8, 7), VEG.trunkDark);
+      tr.position.y = 1.4; tr.castShadow = true; g.add(tr);
+      for (const [x, y, r] of [[0, 3.7, 2.1], [-1.0, 3.2, 1.5], [1.0, 3.3, 1.5], [0, 4.9, 1.35]]) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(r, 8, 6), VEG.lush); b.position.set(x, y, 0); b.castShadow = true; g.add(b);
+      }
+    } else if (kind === 'steppe') {
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.18, 0.7, 6), VEG.trunk);
+      tr.position.y = 0.35; g.add(tr);
+      const b = new THREE.Mesh(new THREE.SphereGeometry(0.85, 7, 5), VEG.steppe);
+      b.position.y = 1.0; b.scale.y = 0.7; b.castShadow = true; g.add(b);
+    } else if (kind === 'maki') {
+      for (const [x, z, r] of [[0, 0, 0.95], [0.75, 0.3, 0.6], [-0.65, -0.2, 0.55]]) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(r, 7, 5), VEG.maki);
+        b.position.set(x, r * 0.65, z); b.scale.y = 0.6; b.castShadow = true; g.add(b);
+      }
+    } else {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.6, 7), VEG.trunk);
+      trunk.position.y = 0.8; trunk.castShadow = true; g.add(trunk);
+      for (let i = 0; i < 3; i++) {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(1.5 - i * 0.35, 1.6, 8), VEG.pine);
+        cone.position.y = 1.8 + i * 0.9; cone.castShadow = true; g.add(cone);
+      }
     }
     return g;
   }
 
+  const mountainItems = [];   // { node, side } -> sahil bölgesinde deniz tarafı gizlenir
   function addMountains() {
     const mat = new THREE.MeshStandardMaterial({ color: 0x5d76a3, roughness: 1, flatShading: true });
     const snow = new THREE.MeshStandardMaterial({ color: 0xeef4ff, roughness: 1, flatShading: true });
     const grp = new THREE.Group();
     for (let i = 0; i < 16; i++) {
+      const node = new THREE.Group();
       const h = 30 + Math.random() * 55;
       const r = 22 + Math.random() * 26;
       const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 5), mat);
       const side = i < 8 ? -1 : 1;
       m.position.set((40 + Math.random() * 120) * side, h / 2 - 4, -260 - Math.random() * 160);
-      grp.add(m);
+      node.add(m);
       const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.4, h * 0.28, 5), snow);
       cap.position.set(m.position.x, m.position.y + h * 0.36, m.position.z);
-      grp.add(cap);
+      node.add(cap);
+      grp.add(node); mountainItems.push({ node, side });
     }
     scene.add(grp);
   }
@@ -685,14 +715,56 @@
   }
 
   // Ağaçlar (kaydırılan)
+  // ----------------------------- Bölgeler & Rota (il plakaları) -----------------------------
+  // sea: 0 yok, -1 sol, +1 sağ.  curve/hill: yol karakteri çarpanı.  density: ağaç yoğunluğu.
+  const REGIONS = {
+    marmara:   { label: 'Marmara',          ground: 0x4f9a4a, tree: 'mixed',  density: 1.0,  curve: 1.0,  hill: 0.9,  sea: 0 },
+    karadeniz: { label: 'Karadeniz',        ground: 0x2f7d30, tree: 'lush',   density: 1.7,  curve: 1.15, hill: 1.35, sea: 0 },
+    ksahil:    { label: 'Karadeniz Sahili', ground: 0x2f7d30, tree: 'lush',   density: 1.3,  curve: 1.1,  hill: 1.0,  sea: -1 },
+    icanadolu: { label: 'İç Anadolu',       ground: 0xc2ac63, tree: 'steppe', density: 0.45, curve: 0.22, hill: 0.3,  sea: 0 },
+    akdeniz:   { label: 'Akdeniz',          ground: 0x8a9c4a, tree: 'maki',   density: 1.15, curve: 1.95, hill: 1.45, sea: -1 }
+  };
+  const ROUTE = [
+    { name: 'İstanbul', plate: '34', region: 'marmara' },
+    { name: 'Sakarya', plate: '54', region: 'marmara' },
+    { name: 'Bolu', plate: '14', region: 'karadeniz' },
+    { name: 'Düzce', plate: '81', region: 'karadeniz' },
+    { name: 'Zonguldak', plate: '67', region: 'ksahil' },
+    { name: 'Kastamonu', plate: '37', region: 'karadeniz' },
+    { name: 'Amasya', plate: '05', region: 'karadeniz' },
+    { name: 'Çorum', plate: '19', region: 'icanadolu' },
+    { name: 'Çankırı', plate: '18', region: 'icanadolu' },
+    { name: 'Ankara', plate: '06', region: 'icanadolu' },
+    { name: 'Konya', plate: '42', region: 'icanadolu' },
+    { name: 'Antalya', plate: '07', region: 'akdeniz' },
+    { name: 'Mersin', plate: '33', region: 'akdeniz' }
+  ];
+  const PROV_LEN = 2600;                 // her ilin yol uzunluğu
+  let routeIdx = -1;
+  let curRegion = REGIONS.marmara;
+
   const trees = [];
-  for (let i = 0; i < 22; i++) {
-    const t = buildTree();
-    scene.add(t);
+  function setTreeVeg(tr, kind) {
+    if (tr.kind === kind) return;
+    tr.kind = kind;
+    if (tr.veg) tr.group.remove(tr.veg);
+    tr.veg = buildVeg(kind); tr.group.add(tr.veg);
+  }
+  function placeTree(tr) {               // geri dönüştürülünce bölgeye göre yerleştir
+    tr.z -= (200 / curRegion.density) + Math.random() * 60;
+    const land = curRegion.sea ? -curRegion.sea : (Math.random() < 0.5 ? -1 : 1);
+    tr.x = land * (ROAD_W / 2 + 4 + Math.random() * 14);
+    setTreeVeg(tr, curRegion.tree);
+    tr.group.visible = Math.random() < Math.min(1, curRegion.density);
+    const s = (0.8 + Math.random() * 0.7) * (curRegion.tree === 'lush' ? 1.25 : curRegion.tree === 'maki' ? 0.7 : 1);
+    tr.group.scale.setScalar(s);
+  }
+  for (let i = 0; i < 24; i++) {
+    const group = new THREE.Group(); scene.add(group);
     const side = i % 2 ? 1 : -1;
-    const tr = { model: t, z: -i * 26 - Math.random() * 20, x: side * (ROAD_W / 2 + 4 + Math.random() * 14) };
-    t.position.set(tr.x, 0, tr.z);
-    t.scale.setScalar(0.8 + Math.random() * 0.7);
+    const tr = { group, veg: null, kind: null, z: -i * 24 - Math.random() * 20, x: side * (ROAD_W / 2 + 4 + Math.random() * 14) };
+    setTreeVeg(tr, 'mixed');
+    group.position.set(tr.x, 0, tr.z); group.scale.setScalar(0.9 + Math.random() * 0.6);
     trees.push(tr);
   }
 
@@ -801,6 +873,211 @@
       }
     }
     function reset() { signOn = false; radOn = false; sign.visible = false; cam.visible = false; timer = 10 + Math.random() * 12; }
+    return { update, reset };
+  })();
+
+  // ----------------------------- Deniz (sahil bölgeleri) -----------------------------
+  const sea = (function () {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 256; const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 256); grad.addColorStop(0, '#2f74b3'); grad.addColorStop(1, '#0f3e6b');
+    g.fillStyle = grad; g.fillRect(0, 0, 64, 256);
+    g.strokeStyle = 'rgba(255,255,255,0.16)'; g.lineWidth = 2;
+    for (let i = 0; i < 46; i++) { const y = Math.random() * 256; g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(20, y - 3, 44, y + 3, 64, y); g.stroke(); }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(6, 34);
+    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.22, metalness: 0.1, transparent: true, opacity: 0 });
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(380, 1200), mat);
+    m.rotation.x = -Math.PI / 2; m.position.set(-210, -0.04, -300); m.visible = false; scene.add(m);
+    return { mesh: m, mat, tex, op: 0 };
+  })();
+  function applyMountains() { for (const it of mountainItems) it.node.visible = !(curRegion.sea && it.side === curRegion.sea); }
+  function updateSea(dt) {
+    const target = curRegion.sea ? 0.92 : 0;
+    sea.op += (target - sea.op) * Math.min(1, dt * 1.2);
+    sea.mat.opacity = sea.op; sea.mesh.visible = sea.op > 0.02;
+    if (curRegion.sea) sea.mesh.position.x = curRegion.sea * 210;
+    sea.tex.offset.y -= dt * 0.05;
+  }
+
+  // ----------------------------- İl giriş levhası -----------------------------
+  function makeProvinceTex(name, plate) {
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256; const g = c.getContext('2d');
+    g.fillStyle = '#0b7a33';
+    if (g.roundRect) { g.beginPath(); g.roundRect(8, 8, 496, 240, 18); g.fill(); } else g.fillRect(8, 8, 496, 240);
+    g.lineWidth = 8; g.strokeStyle = '#fff';
+    if (g.roundRect) { g.beginPath(); g.roundRect(18, 18, 476, 220, 14); g.stroke(); } else g.strokeRect(18, 18, 476, 220);
+    g.fillStyle = '#fff'; g.textAlign = 'center';
+    g.font = 'bold 62px sans-serif'; g.fillText(name, 256, 96);
+    g.fillStyle = '#fff'; g.fillRect(186, 132, 140, 76);
+    g.fillStyle = '#0b3aa0'; g.fillRect(186, 132, 34, 76);
+    g.fillStyle = '#fff'; g.font = 'bold 18px sans-serif'; g.fillText('TR', 203, 174);
+    g.fillStyle = '#111'; g.font = '900 52px Arial, sans-serif'; g.fillText(plate, 276, 178);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  const provSign = (function () {
+    const grp = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 4.2, 6), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.6 }));
+    post.position.y = 2.1; grp.add(post);
+    const mat = new THREE.MeshStandardMaterial({ transparent: true, roughness: 0.7 });
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 2.2), mat); panel.position.y = 4.3; grp.add(panel);
+    grp.visible = false; scene.add(grp);
+    return { grp, mat, z: 0, on: false };
+  })();
+  function showProvinceSign(name, plate) {
+    if (provSign.mat.map) provSign.mat.map.dispose();
+    provSign.mat.map = makeProvinceTex(name, plate); provSign.mat.needsUpdate = true;
+    provSign.z = -255; provSign.on = true; provSign.grp.visible = true;
+  }
+  function updateProvinceSign(dt, sp) {
+    if (!provSign.on) return;
+    provSign.z += sp * dt;
+    const SIDE = ROAD_W / 2 + 4.2;
+    provSign.grp.position.set(SIDE + offX(provSign.z), offY(provSign.z), provSign.z);
+    if (provSign.z > 18) { provSign.on = false; provSign.grp.visible = false; }
+  }
+
+  // ----------------------------- Yol kenarı: benzinlik & göl -----------------------------
+  function buildGasStation() {
+    const g = new THREE.Group();
+    g.add(meshBox(10, 0.1, 8, 0xbfc3c8, 0, 0.05, 0));
+    const b = meshBox(4, 2.6, 3, 0xeef2f5, -2.6, 1.3, -1.6); b.castShadow = true; g.add(b);
+    const roof = meshBox(7.4, 0.35, 5.2, 0xd83838, 1.4, 3.3, 0.4); roof.castShadow = true; g.add(roof);
+    for (const x of [-1.6, 4.4]) g.add(meshCyl(0.12, 3.2, 0xcccccc, x, 1.65, 2.6));
+    for (const x of [0.4, 2.6]) g.add(meshBox(0.5, 1.1, 0.5, 0x2b6cb0, x, 0.65, 0.4));
+    g.add(meshCyl(0.1, 5, 0x888888, 5.3, 2.5, -2.2));
+    const sign = meshBox(2.4, 1.1, 0.2, 0xffcf33, 5.3, 5.0, -2.2);
+    sign.material.emissive = new THREE.Color(0xffcf33); sign.material.emissiveIntensity = 0.35; g.add(sign);
+    return g;
+  }
+  function buildLake() {
+    const g = new THREE.Group();
+    const w = new THREE.Mesh(new THREE.CircleGeometry(9, 22), new THREE.MeshStandardMaterial({ color: 0x2f7fb5, roughness: 0.2, metalness: 0.1 }));
+    w.rotation.x = -Math.PI / 2; w.position.y = 0.02; g.add(w);
+    for (let i = 0; i < 9; i++) { const a = Math.random() * 6.28; g.add(meshCone(0.3, 1.4, VEG.steppe.color.getHex(), Math.cos(a) * 8, 0.7, Math.sin(a) * 8)); }
+    return g;
+  }
+  function meshBox(w, h, d, col, x, y, z) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: col, roughness: 0.85 })); m.position.set(x, y, z); return m; }
+  function meshCyl(r, h, col, x, y, z) { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 7), new THREE.MeshStandardMaterial({ color: col, roughness: 0.7 })); m.position.set(x, y, z); return m; }
+  function meshCone(r, h, col, x, y, z) { const m = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), new THREE.MeshStandardMaterial({ color: col, roughness: 1 })); m.position.set(x, y, z); return m; }
+  const PROPS = (function () {
+    const gas = buildGasStation(); gas.visible = false; gas.rotation.y = -0.25; scene.add(gas);
+    const lake = buildLake(); lake.visible = false; scene.add(lake);
+    let gz = 0, gon = false, gt = 12 + Math.random() * 14;
+    let lz = 0, lon = false, lt = 24 + Math.random() * 22, lside = -1;
+    function update(dt, sp) {
+      if (!gon) { gt -= dt; if (gt <= 0) { gon = true; gz = -300; gt = 24 + Math.random() * 28; } }
+      if (gon) { gz += sp * dt; gas.visible = true; gas.position.set((ROAD_W / 2 + 9) + offX(gz), offY(gz), gz); if (gz > 32) { gon = false; gas.visible = false; } }
+      if (!lon) { lt -= dt; if (lt <= 0) { if (!curRegion.sea) { lon = true; lz = -320; lside = curRegion.sea ? -curRegion.sea : (Math.random() < 0.5 ? -1 : 1); } lt = 30 + Math.random() * 28; } }
+      if (lon) { lz += sp * dt; lake.visible = true; lake.position.set(lside * (ROAD_W / 2 + 14) + offX(lz), -0.01 + offY(lz), lz); if (lz > 36) { lon = false; lake.visible = false; } }
+    }
+    function reset() { gon = false; lon = false; gas.visible = false; lake.visible = false; gt = 12 + Math.random() * 14; lt = 24 + Math.random() * 22; }
+    return { update, reset };
+  })();
+
+  // ----------------------------- Rota ilerlemesi (il + bölge) -----------------------------
+  const grassCol = new THREE.Color(0x4f9a4a);
+  const targetGround = new THREE.Color(0x4f9a4a);
+  let routeEl = null;
+  function ensureRouteEl() { if (!routeEl) { routeEl = document.createElement('div'); routeEl.id = 'route3d'; const sh = document.getElementById('game-shell'); if (sh && sh.appendChild) sh.appendChild(routeEl); } }
+  function updateRoute(dt, sp) {
+    const idx = ((Math.floor(dist / PROV_LEN) % ROUTE.length) + ROUTE.length) % ROUTE.length;
+    if (idx !== routeIdx && ROUTE[idx]) {
+      routeIdx = idx; const p = ROUTE[idx]; curRegion = REGIONS[p.region];
+      targetGround.set(curRegion.ground); applyMountains();
+      showProvinceSign(p.name, p.plate);
+      ensureRouteEl(); if (routeEl) routeEl.textContent = '📍 ' + p.name + ' ' + p.plate;
+      pushPop('🛣️ ' + p.name + ' ' + p.plate + ' • ' + curRegion.label);
+      Audio.coin();
+    }
+    curveMul += (curRegion.curve - curveMul) * Math.min(1, dt * 0.5);
+    hillMul += (curRegion.hill - hillMul) * Math.min(1, dt * 0.5);
+    grassCol.lerp(targetGround, Math.min(1, dt * 0.8)); grassRibbon.material.color.copy(grassCol);
+    updateSea(dt); updateProvinceSign(dt, sp);
+    PROPS.update(dt, sp);
+    SIDEFX.update(dt, sp);
+  }
+
+  // ----------------------------- Yan olaylar: arıza (dörtlü) & kavşak -----------------------------
+  let junctionActive = false, junctionZ = 999;   // trafik bu civarda sol şeritte dikkatli gider
+  function makeTriSignTex() {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d'); g.clearRect(0, 0, 256, 256);
+    g.beginPath(); g.moveTo(128, 22); g.lineTo(238, 214); g.lineTo(18, 214); g.closePath(); g.fillStyle = '#d11'; g.fill();
+    g.beginPath(); g.moveTo(128, 56); g.lineTo(210, 198); g.lineTo(46, 198); g.closePath(); g.fillStyle = '#fff'; g.fill();
+    g.strokeStyle = '#111'; g.lineWidth = 12; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(128, 190); g.lineTo(128, 118); g.stroke();
+    g.beginPath(); g.moveTo(128, 146); g.lineTo(88, 110); g.stroke();
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  function makeLeftArrowTex() {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d'); g.clearRect(0, 0, 128, 256);
+    g.strokeStyle = '#f2f2f2'; g.lineWidth = 16; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(82, 232); g.lineTo(82, 120); g.lineTo(34, 120); g.stroke();
+    g.beginPath(); g.moveTo(50, 96); g.lineTo(18, 120); g.lineTo(50, 144); g.stroke();
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  function signOnPost(tex, w, h) {
+    const group = new THREE.Group();
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 3.4, 6), new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.6 }));
+    post.position.y = 1.7; group.add(post);
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.7 }));
+    panel.position.y = 3.3; group.add(panel);
+    group.visible = false; scene.add(group); return group;
+  }
+  const SIDEFX = (function () {
+    // --- Arızalı/duran araç (sağ banket) + uyarı üçgeni, dörtlüler yanar ---
+    const haz = buildCar(0xb43c3c); attachBlinkers(haz, 'car'); haz.visible = false; scene.add(haz);
+    const triHaz = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ map: makeTriSignTex(), transparent: true, side: THREE.DoubleSide }));
+    triHaz.position.y = 0.5; const triGrp = new THREE.Group(); triGrp.add(triHaz); triGrp.visible = false; scene.add(triGrp);
+    let hz = 0, hon = false, ht = 14 + Math.random() * 16, hblink = 0;
+    // --- Kavşak (sol): uyarı levhası + yan yol + sola dönüş oku + dönen araç ---
+    const warn = signOnPost(makeTriSignTex(), 1.7, 1.7);
+    const sideRoad = new THREE.Mesh(new THREE.PlaneGeometry(30, 9), new THREE.MeshStandardMaterial({ color: 0x4c5057, roughness: 0.95 }));
+    sideRoad.rotation.x = -Math.PI / 2; sideRoad.visible = false; scene.add(sideRoad);
+    const arrow = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 3.2), new THREE.MeshBasicMaterial({ map: makeLeftArrowTex(), transparent: true }));
+    arrow.rotation.x = -Math.PI / 2; arrow.visible = false; scene.add(arrow);
+    const turner = buildCar(0xeeeeee); attachBlinkers(turner, 'car'); turner.visible = false; scene.add(turner);
+    let jz = 0, jon = false, jt = 18 + Math.random() * 18, jblink = 0, tprog = 0;
+    function update(dt, sp) {
+      // ---- arıza ----
+      hblink += dt;
+      if (!hon) { ht -= dt; if (ht <= 0) { hon = true; hz = -300; ht = 20 + Math.random() * 24; } }
+      if (hon) {
+        hz += sp * dt; haz.visible = true; triGrp.visible = true;
+        const X = ROAD_W / 2 + 2.3;
+        haz.position.set(X + offX(hz), offY(hz), hz);
+        haz.rotation.y = -Math.atan2(offX(hz - 4) - offX(hz), 4);
+        triGrp.position.set(X + offX(hz + 5), offY(hz + 5), hz + 5);
+        const on = (hblink % 0.64) < 0.32;
+        haz.userData.blinkL.emissiveIntensity = on ? 2.4 : 0;
+        haz.userData.blinkR.emissiveIntensity = on ? 2.4 : 0;
+        if (hz > 26) { hon = false; haz.visible = false; triGrp.visible = false; }
+      }
+      // ---- kavşak ----
+      if (!jon) { jt -= dt; if (jt <= 0) { jon = true; jz = -330; tprog = 0; jt = 22 + Math.random() * 26; } }
+      if (jon) {
+        jblink += dt; jz += sp * dt; junctionActive = true; junctionZ = jz;
+        const wz = jz - 130;                              // uyarı levhası kavşaktan önce gelir
+        warn.visible = wz < 20 && wz > -340;
+        warn.position.set((ROAD_W / 2 + 4.2) + offX(wz), offY(wz), wz);
+        sideRoad.visible = true; sideRoad.position.set(-(ROAD_W / 2 + 15) + offX(jz), -0.02 + offY(jz), jz);
+        arrow.visible = true; arrow.position.set(laneX(0) + offX(jz), 0.05 + offY(jz), jz);
+        // sola dönen araç: sol sinyalini yakar, kavşağa gelince sola kıvrılıp ayrılır
+        const tz = jz - 4;
+        if (jz > -40) tprog = Math.min(1, tprog + dt * 0.7);
+        turner.visible = tprog < 0.96;
+        const tx = laneX(0) - tprog * 9;
+        turner.position.set(tx + offX(tz), offY(tz), tz);
+        turner.rotation.y = -Math.atan2(offX(tz - 4) - offX(tz), 4) + tprog * 0.95;
+        const ton = (jblink % 0.64) < 0.32;
+        turner.userData.blinkL.emissiveIntensity = ton ? 2.6 : 0;
+        turner.userData.blinkR.emissiveIntensity = 0;
+        if (jz > 30) { jon = false; junctionActive = false; junctionZ = 999; warn.visible = false; sideRoad.visible = false; arrow.visible = false; turner.visible = false; }
+      }
+    }
+    function reset() {
+      hon = false; jon = false; junctionActive = false; junctionZ = 999;
+      haz.visible = false; triGrp.visible = false; warn.visible = false; sideRoad.visible = false; arrow.visible = false; turner.visible = false;
+      ht = 14 + Math.random() * 16; jt = 18 + Math.random() * 18;
+    }
     return { update, reset };
   })();
 
@@ -1034,7 +1311,10 @@
     player.x = 0; player.vx = 0; player.lane = 1; player.speed = 0; player.steer = 0; player.grip = 0.35; player.highBeam = false;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
     player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
-    ENV.reset(); RADAR.reset();
+    ENV.reset(); RADAR.reset(); PROPS.reset(); SIDEFX.reset();
+    routeIdx = -1; curRegion = REGIONS.marmara;
+    curveMul = curRegion.curve; hillMul = curRegion.hill;
+    grassCol.set(curRegion.ground); targetGround.set(curRegion.ground);
     spawnTraffic();
     for (const co of coins) { co.taken = false; co.model.visible = true; co.z = -40 - Math.random() * 200; co.lane = (Math.random() * LANES) | 0; co.model.position.x = laneX(co.lane); }
     state = State.PLAY;
@@ -1141,7 +1421,7 @@
     crash.worldSpd *= Math.pow(0.06, dt);
     const ws = crash.worldSpd;
     roadTex.offset.y -= ws * dt / SEG_WORLD;
-    for (const tr of trees) { tr.z += ws * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z); }
+    for (const tr of trees) { tr.z += ws * dt; if (tr.z > 25) placeTree(tr); tr.group.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z); }
 
     // oyuncu arabası savrulur
     crash.vy -= 24 * dt;
@@ -1217,6 +1497,7 @@
     if (player.x > lim + 1.4) { player.x = lim + 1.4; player.vx *= -0.3; }
     // yol dışı (banket) yavaşlama
     if (Math.abs(player.x) > lim) player.speed -= effMax / 1.6 * dt * 0.6;
+    if (player.speed < 0) player.speed = 0;   // negatif hıza düşmesin (geri gitmez)
 
     player.steer += (steerInput - player.steer) * Math.min(1, dt * 9);
 
@@ -1224,6 +1505,7 @@
     dist += sp * dt;
     if (dist > level * 3000) advanceLevel();
     score += sp * dt * 0.05;
+    updateRoute(dt, sp);     // il/bölge geçişi, deniz, benzinlik, kavşak, arıza
 
     // yol dokusu kaydır + yolu/çimeni eğriye göre büker
     roadTex.offset.y -= sp * dt / SEG_WORLD;
@@ -1232,8 +1514,8 @@
     // ağaçlar / coinler dünyayla birlikte yaklaşsın (+z), eğriyi takip eder
     for (const tr of trees) {
       tr.z += sp * dt;
-      if (tr.z > 25) { tr.z -= 22 * trees.length / 2 + Math.random() * 30; tr.x = (Math.random() < 0.5 ? -1 : 1) * (ROAD_W / 2 + 4 + Math.random() * 14); }
-      tr.model.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z);
+      if (tr.z > 25) placeTree(tr);
+      tr.group.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z);
     }
     for (const co of coins) {
       co.z += sp * dt;
@@ -1250,7 +1532,10 @@
       if (car.anger > 0) car.anger -= dt;
       if (car.boost > 0) car.boost -= dt;
       const fast = car.anger > 0 || car.boost > 0;
-      const target = fast ? car.rageMax : car.cruise;
+      // kavşak yakınında sol şeritte dikkatli/yavaş gider
+      const cautious = junctionActive && car.lane === 0 && Math.abs(car.z - junctionZ) < 34;
+      let target = fast ? car.rageMax : car.cruise;
+      if (cautious) target = Math.min(target, car.cruise * 0.55);
       const rate = (fast ? 0.9 : 0.4) * MAX_SPEED;
       car.spd += Math.sign(target - car.spd) * Math.min(Math.abs(target - car.spd), rate * dt);
       car.z += (sp - car.spd) * dt;
@@ -1383,7 +1668,7 @@
     dist += 30 * dt;
     roadTex.offset.y -= 30 * dt / SEG_WORLD;
     updateRibbons();
-    for (const tr of trees) { tr.z += 30 * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z); }
+    for (const tr of trees) { tr.z += 30 * dt; if (tr.z > 25) placeTree(tr); tr.group.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z); }
     for (const co of coins) { co.model.position.set(laneX(co.lane) + offX(co.z), 1.1 + offY(co.z), co.z); co.model.rotation.z += dt * 3; }
     camera.position.x += ((offX(9) * 0.6) - camera.position.x) * 0.04;
     camera.position.y += ((4.3 + offY(9)) - camera.position.y) * 0.06;

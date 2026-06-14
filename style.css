@@ -171,6 +171,19 @@ html, body {
   transition: opacity .1s linear;
 }
 
+/* Bulunduğun il + plaka etiketi */
+#route3d {
+  position: absolute;
+  left: 50%; top: 64px;
+  transform: translateX(-50%);
+  padding: 5px 14px; border-radius: 999px;
+  background: rgba(8, 14, 30, 0.62);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #eaf0ff; font-weight: 800; font-size: 15px; letter-spacing: 0.5px;
+  white-space: nowrap; pointer-events: none; z-index: 24;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+}
+
 .sound-btn { right: calc(max(14px, env(safe-area-inset-right)) + 56px); }
 .sound-btn svg.hidden { display: none; }
 
