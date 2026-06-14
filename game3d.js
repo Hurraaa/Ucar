@@ -785,16 +785,18 @@
   function placeTree(tr) {               // geri dönüştürülünce bölgeye göre yerleştir
     tr.z -= (200 / curRegion.density) + Math.random() * 60;
     const land = curRegion.sea ? -curRegion.sea : (Math.random() < 0.5 ? -1 : 1);
-    tr.x = land * (ROAD_W / 2 + 4 + Math.random() * 14);
+    tr.x = treeX(land);
     setTreeVeg(tr, curRegion.tree);
     tr.group.visible = Math.random() < Math.min(1, curRegion.density);
     const s = (0.8 + Math.random() * 0.7) * (curRegion.tree === 'lush' ? 1.25 : curRegion.tree === 'maki' ? 0.7 : 1);
     tr.group.scale.setScalar(s);
   }
+  // sol = bölünmüş yolun karşı şeridi olduğundan ağaçlar sol tarafta karşı yolun ötesine konur
+  function treeX(land) { const base = land < 0 ? 23 : (ROAD_W / 2 + 4); return land * (base + Math.random() * 14); }
   for (let i = 0; i < 24; i++) {
     const group = new THREE.Group(); scene.add(group);
     const side = i % 2 ? 1 : -1;
-    const tr = { group, veg: null, kind: null, z: -i * 24 - Math.random() * 20, x: side * (ROAD_W / 2 + 4 + Math.random() * 14) };
+    const tr = { group, veg: null, kind: null, z: -i * 24 - Math.random() * 20, x: treeX(side) };
     setTreeVeg(tr, 'mixed');
     group.position.set(tr.x, 0, tr.z); group.scale.setScalar(0.9 + Math.random() * 0.6);
     trees.push(tr);
@@ -1003,8 +1005,9 @@
     function update(dt, sp) {
       if (!gon) { gt -= dt; if (gt <= 0) { gon = true; gz = -300; gt = 24 + Math.random() * 28; } }
       if (gon) { gz += sp * dt; gas.visible = true; gas.position.set((ROAD_W / 2 + 9) + offX(gz), offY(gz), gz); if (gz > 32) { gon = false; gas.visible = false; } }
-      if (!lon) { lt -= dt; if (lt <= 0) { if (!curRegion.sea) { lon = true; lz = -320; lside = curRegion.sea ? -curRegion.sea : (Math.random() < 0.5 ? -1 : 1); } lt = 30 + Math.random() * 28; } }
-      if (lon) { lz += sp * dt; lake.visible = true; lake.position.set(lside * (ROAD_W / 2 + 14) + offX(lz), -0.01 + offY(lz), lz); if (lz > 36) { lon = false; lake.visible = false; } }
+      if (!lon) { lt -= dt; if (lt <= 0) { if (!curRegion.sea) { lon = true; lz = -320; } lt = 30 + Math.random() * 28; } }
+      // göl sağ tarafta (sol artık bölünmüş yolun karşı şeridi); merkez sağ banketin ötesinde
+      if (lon) { lz += sp * dt; lake.visible = true; lake.position.set((ROAD_W / 2 + 22) + offX(lz), -0.01 + offY(lz), lz); if (lz > 36) { lon = false; lake.visible = false; } }
     }
     function reset() { gon = false; lon = false; gas.visible = false; lake.visible = false; gt = 12 + Math.random() * 14; lt = 24 + Math.random() * 22; }
     return { update, reset };
