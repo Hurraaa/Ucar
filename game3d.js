@@ -537,9 +537,11 @@
     return g;
   }
 
-  const mountainItems = [];   // { node, side } -> sahil bölgesinde deniz tarafı gizlenir
+  const mountainItems = [];   // { node, side, cap } -> sahilde deniz tarafı gizlenir, karsız bölgede cap kapanır
+  let mountMat = null;
   function addMountains() {
     const mat = new THREE.MeshStandardMaterial({ color: 0x5d76a3, roughness: 1, flatShading: true });
+    mountMat = mat;
     const snow = new THREE.MeshStandardMaterial({ color: 0xeef4ff, roughness: 1, flatShading: true });
     const grp = new THREE.Group();
     for (let i = 0; i < 16; i++) {
@@ -553,7 +555,7 @@
       const cap = new THREE.Mesh(new THREE.ConeGeometry(r * 0.4, h * 0.28, 5), snow);
       cap.position.set(m.position.x, m.position.y + h * 0.36, m.position.z);
       node.add(cap);
-      grp.add(node); mountainItems.push({ node, side });
+      grp.add(node); mountainItems.push({ node, side, cap });
     }
     scene.add(grp);
   }
@@ -718,11 +720,11 @@
   // ----------------------------- Bölgeler & Rota (il plakaları) -----------------------------
   // sea: 0 yok, -1 sol, +1 sağ.  curve/hill: yol karakteri çarpanı.  density: ağaç yoğunluğu.
   const REGIONS = {
-    marmara:   { label: 'Marmara',          ground: 0x4f9a4a, tree: 'mixed',  density: 1.0,  curve: 1.0,  hill: 0.9,  sea: 0 },
-    karadeniz: { label: 'Karadeniz',        ground: 0x2f7d30, tree: 'lush',   density: 1.7,  curve: 1.15, hill: 1.35, sea: 0 },
-    ksahil:    { label: 'Karadeniz Sahili', ground: 0x2f7d30, tree: 'lush',   density: 1.3,  curve: 1.1,  hill: 1.0,  sea: -1 },
-    icanadolu: { label: 'İç Anadolu',       ground: 0xc2ac63, tree: 'steppe', density: 0.45, curve: 0.22, hill: 0.3,  sea: 0 },
-    akdeniz:   { label: 'Akdeniz',          ground: 0x8a9c4a, tree: 'maki',   density: 1.15, curve: 1.95, hill: 1.45, sea: -1 }
+    marmara:   { label: 'Marmara',          ground: 0x4f9a4a, tree: 'mixed',  density: 1.0,  curve: 1.0,  hill: 0.9,  sea: 0,  mtn: 0x5f7d8a, snow: true },
+    karadeniz: { label: 'Karadeniz',        ground: 0x2f7d30, tree: 'lush',   density: 1.7,  curve: 1.15, hill: 1.35, sea: 0,  mtn: 0x466b50, snow: true },
+    ksahil:    { label: 'Karadeniz Sahili', ground: 0x2f7d30, tree: 'lush',   density: 1.3,  curve: 1.1,  hill: 1.0,  sea: -1, mtn: 0x466b50, snow: true },
+    icanadolu: { label: 'İç Anadolu',       ground: 0xc2ac63, tree: 'steppe', density: 0.45, curve: 0.22, hill: 0.3,  sea: 0,  mtn: 0xa6916a, snow: false },
+    akdeniz:   { label: 'Akdeniz',          ground: 0x8a9c4a, tree: 'maki',   density: 1.15, curve: 1.95, hill: 1.45, sea: -1, mtn: 0x9c9078, snow: false }
   };
   const ROUTE = [
     { name: 'İstanbul', plate: '34', region: 'marmara' },
@@ -889,7 +891,12 @@
     m.rotation.x = -Math.PI / 2; m.position.set(-210, -0.04, -300); m.visible = false; scene.add(m);
     return { mesh: m, mat, tex, op: 0 };
   })();
-  function applyMountains() { for (const it of mountainItems) it.node.visible = !(curRegion.sea && it.side === curRegion.sea); }
+  function applyMountains() {
+    for (const it of mountainItems) {
+      it.node.visible = !(curRegion.sea && it.side === curRegion.sea);
+      it.cap.visible = curRegion.snow;     // İç Anadolu/Akdeniz: karsız çıplak tepeler
+    }
+  }
   function updateSea(dt) {
     const target = curRegion.sea ? 0.92 : 0;
     sea.op += (target - sea.op) * Math.min(1, dt * 1.2);
@@ -976,13 +983,14 @@
   // ----------------------------- Rota ilerlemesi (il + bölge) -----------------------------
   const grassCol = new THREE.Color(0x4f9a4a);
   const targetGround = new THREE.Color(0x4f9a4a);
+  const targetMtn = new THREE.Color(0x5f7d8a);
   let routeEl = null;
   function ensureRouteEl() { if (!routeEl) { routeEl = document.createElement('div'); routeEl.id = 'route3d'; const sh = document.getElementById('game-shell'); if (sh && sh.appendChild) sh.appendChild(routeEl); } }
   function updateRoute(dt, sp) {
     const idx = ((Math.floor(dist / PROV_LEN) % ROUTE.length) + ROUTE.length) % ROUTE.length;
     if (idx !== routeIdx && ROUTE[idx]) {
       routeIdx = idx; const p = ROUTE[idx]; curRegion = REGIONS[p.region];
-      targetGround.set(curRegion.ground); applyMountains();
+      targetGround.set(curRegion.ground); targetMtn.set(curRegion.mtn); applyMountains();
       showProvinceSign(p.name, p.plate);
       ensureRouteEl(); if (routeEl) routeEl.textContent = '📍 ' + p.name + ' ' + p.plate;
       pushPop('🛣️ ' + p.name + ' ' + p.plate + ' • ' + curRegion.label);
@@ -991,6 +999,7 @@
     curveMul += (curRegion.curve - curveMul) * Math.min(1, dt * 0.5);
     hillMul += (curRegion.hill - hillMul) * Math.min(1, dt * 0.5);
     grassCol.lerp(targetGround, Math.min(1, dt * 0.8)); grassRibbon.material.color.copy(grassCol);
+    if (mountMat) mountMat.color.lerp(targetMtn, Math.min(1, dt * 0.5));
     updateSea(dt); updateProvinceSign(dt, sp);
     PROPS.update(dt, sp);
     SIDEFX.update(dt, sp);
@@ -1538,6 +1547,7 @@
     routeIdx = -1; curRegion = REGIONS.marmara;
     curveMul = curRegion.curve; hillMul = curRegion.hill;
     grassCol.set(curRegion.ground); targetGround.set(curRegion.ground);
+    targetMtn.set(curRegion.mtn); if (mountMat) mountMat.color.set(curRegion.mtn); applyMountains();
     spawnTraffic();
     for (const co of coins) { co.taken = false; co.model.visible = true; co.z = -40 - Math.random() * 200; co.lane = (Math.random() * LANES) | 0; co.model.position.x = laneX(co.lane); }
     state = State.PLAY;
