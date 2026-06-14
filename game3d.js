@@ -272,15 +272,33 @@
   }
 
   // ----------------------------- Araba modeli -----------------------------
+  // Köşeleri yuvarlanmış kutu (premium, az keskin) — segmentli kutu + köşeleri küreye it
+  function roundedBox(w, h, d, seg) {
+    seg = seg || 3;
+    const r = Math.min(0.16, 0.45 * Math.min(w, h, d));
+    const geo = new THREE.BoxGeometry(w, h, d, seg, seg, seg);
+    const pos = geo.attributes.position;
+    const hw = w / 2 - r, hh = h / 2 - r, hd = d / 2 - r;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const cx = Math.max(-hw, Math.min(hw, x)), cy = Math.max(-hh, Math.min(hh, y)), cz = Math.max(-hd, Math.min(hd, z));
+      let dx = x - cx, dy = y - cy, dz = z - cz;
+      const len = Math.hypot(dx, dy, dz) || 1;
+      pos.setXYZ(i, cx + dx / len * r, cy + dy / len * r, cz + dz / len * r);
+    }
+    geo.computeVertexNormals();
+    return geo;
+  }
+
   function buildCar(colorHex) {
     const g = new THREE.Group();
-    const paint = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.55, roughness: 0.32 });
+    const paint = new THREE.MeshPhysicalMaterial({ color: colorHex, metalness: 0.5, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.18 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x14161b, metalness: 0.3, roughness: 0.6 });
-    const glass = new THREE.MeshStandardMaterial({ color: 0x1c2a35, metalness: 0.5, roughness: 0.12 });
-    const chrome = new THREE.MeshStandardMaterial({ color: 0xcfd4da, metalness: 0.9, roughness: 0.25 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x121d27, metalness: 0.2, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const chrome = new THREE.MeshStandardMaterial({ color: 0xcfd4da, metalness: 0.95, roughness: 0.2 });
 
     function box(w, h, d, mat, x, y, z) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      const m = new THREE.Mesh(roundedBox(w, h, d), mat);
       m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
     }
 
@@ -331,14 +349,14 @@
   // BMW tarzı beyaz sedan (klasik 3-box, böbrek ızgara, yuvarlak farlar)
   function buildSedan(colorHex) {
     const g = new THREE.Group();
-    const paint = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.45, roughness: 0.28 });
+    const paint = new THREE.MeshPhysicalMaterial({ color: colorHex, metalness: 0.45, roughness: 0.26, clearcoat: 1, clearcoatRoughness: 0.16 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.3, roughness: 0.7 });
-    const glass = new THREE.MeshStandardMaterial({ color: 0x202d38, metalness: 0.5, roughness: 0.1 });
-    const chrome = new THREE.MeshStandardMaterial({ color: 0xd6dbe2, metalness: 0.95, roughness: 0.2 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x18242e, metalness: 0.2, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const chrome = new THREE.MeshStandardMaterial({ color: 0xd6dbe2, metalness: 0.95, roughness: 0.18 });
     const head = new THREE.MeshStandardMaterial({ color: 0xeaf2ff, metalness: 0.6, roughness: 0.2, emissive: 0x223044, emissiveIntensity: 0.5 });
 
     function box(w, h, d, mat, x, y, z) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      const m = new THREE.Mesh(roundedBox(w, h, d), mat);
       m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
     }
 
@@ -444,6 +462,7 @@
 
   let score = 0, best = Number(localStorage.getItem('ucar3d_best') || 0);
   let level = 1, dist = 0, speedBoost = 1, trafficDensity = 1;
+  let nearStreak = 0, nearTimer = 0;   // yakın geçiş combo
 
   // Oyuncu arabası (model değiştirilebilir)
   function rebuildPlayer() {
@@ -471,7 +490,7 @@
       const lane = i % LANES;                       // şeritlere sırayla dağıt
       const z = laneNext[lane] - Math.random() * 30;
       laneNext[lane] = z - (40 + Math.random() * 50);
-      const car = { model: m, lane, z,
+      const car = { model: m, lane, z, passed: false,
         cruise: MAX_SPEED * (0.32 + Math.random() * 0.22), spd: 0, rageMax: MAX_SPEED * (0.6 + Math.random() * 0.18), anger: 0 };
       car.spd = car.cruise;
       car.model.position.set(laneX(car.lane), 0, car.z);
@@ -484,7 +503,7 @@
     let frontMost = -180;
     for (const o of traffic) if (o !== car && o.lane === car.lane) frontMost = Math.min(frontMost, o.z);
     car.z = frontMost - (MIN_GAP + 30 + Math.random() * 100);
-    car.anger = 0; car.spd = car.cruise;
+    car.anger = 0; car.spd = car.cruise; car.passed = false;
     car.cruise = MAX_SPEED * (0.32 + Math.random() * 0.22);
     car.rageMax = MAX_SPEED * (0.6 + Math.random() * 0.18);
     car.model.userData.paint.color.setHex(TRAFFIC_HEX[(Math.random() * TRAFFIC_HEX.length) | 0]);
@@ -625,6 +644,16 @@
     function level() { blip(523, 0.1, 'square', 0.25); setTimeout(() => blip(784, 0.16, 'square', 0.25), 90); }
     function ui() { blip(440, 0.06, 'sine', 0.15, 660); }
     function flash() { blip(1200, 0.05, 'square', 0.12, 1800); }
+    function whoosh() {   // yakın geçiş "vınn" sesi
+      ensure(); if (!A || !enabled) return;
+      const ns = A.createBufferSource(); const buf = A.createBuffer(1, A.sampleRate * 0.3, A.sampleRate);
+      const d = buf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+      ns.buffer = buf;
+      const bp = A.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.2;
+      bp.frequency.setValueAtTime(300, A.currentTime); bp.frequency.exponentialRampToValueAtTime(2200, A.currentTime + 0.25);
+      const g = A.createGain(); g.gain.value = 0.3; g.gain.exponentialRampToValueAtTime(0.0001, A.currentTime + 0.3);
+      ns.connect(bp); bp.connect(g); g.connect(master); ns.start(); ns.stop(A.currentTime + 0.3);
+    }
     function horn() {
       ensure(); if (!A || !enabled) return;
       const dur = 0.55;
@@ -652,7 +681,7 @@
       }
       rainGain.gain.setTargetAtTime(enabled ? level * 0.16 : 0, A.currentTime, 0.4);
     }
-    return { init: () => { ensure(); if (A && A.state === 'suspended') A.resume(); }, startEngine, stopEngine, engine, coin, crash, level, ui, flash, horn, rain, toggle: () => { enabled = !enabled; return enabled; } };
+    return { init: () => { ensure(); if (A && A.state === 'suspended') A.resume(); }, startEngine, stopEngine, engine, coin, crash, level, ui, flash, horn, whoosh, rain, toggle: () => { enabled = !enabled; return enabled; } };
   })();
 
   // ----------------------------- HUD / Menü -----------------------------
@@ -708,7 +737,7 @@
   if (soundBtn) soundBtn.addEventListener('click', () => { Audio.init(); const on = Audio.toggle(); document.getElementById('sound-on').classList.toggle('hidden', !on); document.getElementById('sound-off').classList.toggle('hidden', on); Audio.ui(); });
 
   function startGame() {
-    level = 1; dist = 0; speedBoost = 1; trafficDensity = 1; score = 0;
+    level = 1; dist = 0; speedBoost = 1; trafficDensity = 1; score = 0; nearStreak = 0; nearTimer = 0;
     player.x = 0; player.vx = 0; player.lane = 1; player.speed = 0; player.steer = 0; player.grip = 0.35; player.highBeam = false;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
     player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
@@ -865,6 +894,7 @@
   // ----------------------------- Güncelleme -----------------------------
   function update(dt) {
     const effMax = MAX_SPEED * speedBoost;
+    if (nearTimer > 0) nearTimer -= dt; else nearStreak = 0;
     if (player.highBeam) angerAhead();   // basılı tutuldukça öndeki trafik tedirgin
 
     if (keys.gas) player.speed += effMax / 4 * dt;
@@ -945,7 +975,21 @@
       car.model.rotation.y = -Math.atan2(offX(car.z - 4) - offX(car.z), 4);  // viraja göre yönelim
       const roll = (sp - car.spd) * dt / 0.46;
       for (const wgrp of car.model.userData.wheels) wgrp.children[0].rotation.x += roll;
-      if (Math.abs(car.z) < 3.6 && Math.abs(laneX(car.lane) - player.x) < 1.7 && sp > MAX_SPEED * 0.1) { doCrash(); break; }
+      const lat = Math.abs(laneX(car.lane) - player.x);
+      if (Math.abs(car.z) < 3.6 && lat < 1.7 && sp > MAX_SPEED * 0.1) { doCrash(); break; }
+      // Yakın geçiş bonusu: aracı geçip arkanda bırakınca, yakınsa ödül (combo'lu)
+      if (!car.passed && car.z > 0.6 && sp > car.spd + 4) {
+        car.passed = true;
+        if (lat < 2.9) {
+          nearStreak = nearTimer > 0 ? nearStreak + 1 : 1; nearTimer = 2.5;
+          const mult = Math.min(5, nearStreak);
+          const closeness = Math.max(0, (2.9 - lat) / 1.2);          // 0..1 (yakınlık)
+          const bonus = Math.round((12 + closeness * 48) * mult);
+          score += bonus;
+          pushPop('YAKIN GEÇİŞ! +' + bonus + (mult > 1 ? '  x' + mult : ''));
+          Audio.whoosh();
+        }
+      }
     }
 
     // oyuncu model güncelle
