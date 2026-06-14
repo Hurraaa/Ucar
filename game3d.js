@@ -598,9 +598,9 @@
     player.model = BUILDERS[player.modelType](CAR_COLORS[player.chosen].hex);
     player.model.position.x = oldX;
     // plakayı arkaya tak
-    const pz = player.modelType === 1 ? 2.42 : 2.17;
-    const py = player.modelType === 1 ? 0.62 : 0.56;
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.21), plateMat);
+    const pz = player.modelType === 1 ? 2.43 : 2.18;
+    const py = player.modelType === 1 ? 0.72 : 0.64;
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 0.25), plateMat);
     plate.position.set(0, py, pz); player.model.add(plate);
     scene.add(player.model);
   }
