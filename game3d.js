@@ -214,13 +214,13 @@
   const RIBBON_Z0 = 26, RIBBON_Z1 = -486;  // şeridin yakın/uzak ucu (viewZ)
 
   // Bükülen şerit: düz geometri kur, her kare vertexleri eğriye göre kaydır
-  function buildRibbon(width, mat, yBase, lenSegs) {
+  function buildRibbon(width, mat, yBase, lenSegs, xoff) {
     const geo = new THREE.PlaneGeometry(width, RIBBON_Z0 - RIBBON_Z1, 1, lenSegs);
     geo.rotateX(-Math.PI / 2);
     geo.translate(0, 0, (RIBBON_Z0 + RIBBON_Z1) / 2);
     const pos = geo.attributes.position;
     const baseX = new Float32Array(pos.count), baseZ = new Float32Array(pos.count);
-    for (let i = 0; i < pos.count; i++) { baseX[i] = pos.getX(i); baseZ[i] = pos.getZ(i); }
+    for (let i = 0; i < pos.count; i++) { baseX[i] = pos.getX(i) + (xoff || 0); baseZ[i] = pos.getZ(i); }
     const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = true;
     mesh.userData = { baseX, baseZ, yBase };
     scene.add(mesh); return mesh;
@@ -230,6 +230,27 @@
     for (let i = 0; i < pos.count; i++) { const z = u.baseZ[i]; pos.setX(i, u.baseX[i] + offX(z)); pos.setY(i, u.yBase + offY(z)); }
     pos.needsUpdate = true; mesh.geometry.computeVertexNormals();
   }
+  // Dikey ribbon (otokorkuluk/bariyer): x=xc'de, yb..yt yüksekliğinde, eğriye göre büker
+  function buildRail(xc, yb, yt, color, metal) {
+    const N = 80, z0 = RIBBON_Z0, z1 = RIBBON_Z1;
+    const pos = new Float32Array((N + 1) * 2 * 3), bz = new Float32Array((N + 1) * 2);
+    for (let i = 0; i <= N; i++) {
+      const z = z0 + (z1 - z0) * (i / N), b = (i * 2) * 3, tp = (i * 2 + 1) * 3;
+      pos[b] = xc; pos[b + 1] = yb; pos[b + 2] = z; pos[tp] = xc; pos[tp + 1] = yt; pos[tp + 2] = z;
+      bz[i * 2] = z; bz[i * 2 + 1] = z;
+    }
+    const idx = [];
+    for (let i = 0; i < N; i++) { const a = i * 2, b = i * 2 + 1, cc = (i + 1) * 2, d = (i + 1) * 2 + 1; idx.push(a, cc, b, b, cc, d); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, metalness: metal || 0.5, roughness: 0.5, side: THREE.DoubleSide }));
+    mesh.userData = { bz, xc, yb, yt }; scene.add(mesh); return mesh;
+  }
+  function updateRail(mesh) {
+    const p = mesh.geometry.attributes.position, u = mesh.userData;
+    for (let i = 0; i < p.count; i++) { const z = u.bz[i], yy = (i % 2 === 0) ? u.yb : u.yt; p.setX(i, u.xc + offX(z)); p.setY(i, yy + offY(z)); }
+    p.needsUpdate = true;
+  }
 
   // Çimen + yol şeritleri
   const grassRibbon = buildRibbon(240, new THREE.MeshStandardMaterial({ color: 0x4aa84f, roughness: 1 }), -0.02, 48);
@@ -237,7 +258,16 @@
   roadTex.wrapS = THREE.ClampToEdgeWrapping; roadTex.wrapT = THREE.RepeatWrapping;
   roadTex.repeat.set(1, (RIBBON_Z0 - RIBBON_Z1) / SEG_WORLD);
   const roadRibbon = buildRibbon(ROAD_W + 1.6, new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 }), 0.02, 96);
-  function updateRibbons() { updateRibbon(grassRibbon); updateRibbon(roadRibbon); }
+  // --- Bölünmüş yol: solda karşı yön gidişi (orta refüj + bariyer) ---
+  const MED_C = -(ROAD_W / 2 + 2.5);           // orta refüj/bariyer merkezi (sol)
+  const OPP_C = -(ROAD_W / 2 + 5.0 + ROAD_W / 2); // karşı yol merkezi (sol)
+  const oppRoad = buildRibbon(ROAD_W + 1.6, new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 }), 0.02, 96, OPP_C);
+  const medianRail = buildRail(MED_C, 0.45, 0.98, 0xcdd1d6, 0.55);   // orta refüj otokorkuluğu
+  let rightRail = buildRail(ROAD_W / 2 + 2.4, 0.45, 0.92, 0xc6cad0, 0.5);  // sağ banket otokorkuluğu
+  function updateRibbons() {
+    updateRibbon(grassRibbon); updateRibbon(roadRibbon); updateRibbon(oppRoad);
+    updateRail(medianRail); updateRail(rightRail);
+  }
 
   function makeRoadTexture() {
     const c = document.createElement('canvas');
@@ -1005,10 +1035,14 @@
     SIDEFX.update(dt, sp);
     BRIDGE.update(dt, sp);
     FORK.update(dt, sp);
+    ONCOMING.update(dt, sp);
+    rightRail.visible = !forkActive;   // çıkış rampasında sağ bariyer açılır
   }
 
   // ----------------------------- Yan olaylar: arıza (dörtlü) & kavşak -----------------------------
   let junctionActive = false, junctionZ = 999;   // trafik bu civarda sol şeritte dikkatli gider
+  let forkActive = false;                         // çıkış rampası aktifken sağ bariyer açılır
+  const JUNCTION_ON = false;                       // bölünmüş yolda sol kavşak kapalı (yerine çıkış + üst geçit)
   function makeTriSignTex() {
     const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d'); g.clearRect(0, 0, 256, 256);
     g.beginPath(); g.moveTo(128, 22); g.lineTo(238, 214); g.lineTo(18, 214); g.closePath(); g.fillStyle = '#d11'; g.fill();
@@ -1112,7 +1146,7 @@
       if (!hon) { ht -= dt; if (ht <= 0) { hon = true; hz = -300; ht = 20 + Math.random() * 24; } }
       if (hon) {
         hz += sp * dt; haz.visible = true; triGrp.visible = true;
-        const X = ROAD_W / 2 + 2.3;
+        const X = ROAD_W / 2 + 1.5;       // sağ banket (bariyerin önünde)
         haz.position.set(X + offX(hz), offY(hz), hz);
         haz.rotation.y = -Math.atan2(offX(hz - 4) - offX(hz), 4);
         triGrp.position.set(X + offX(hz + 5), offY(hz + 5), hz + 5);
@@ -1121,8 +1155,8 @@
         haz.userData.blinkR.emissiveIntensity = on ? 2.4 : 0;
         if (hz > 26) { hon = false; haz.visible = false; triGrp.visible = false; }
       }
-      // ---- kavşak ----
-      if (!jon) {
+      // ---- kavşak (bölünmüş yolda kapalı) ----
+      if (!jon && JUNCTION_ON) {
         jt -= dt;
         if (jt <= 0) {
           jon = true; jz = -340; jblink = 0;
@@ -1283,6 +1317,7 @@
           ft = 26 + Math.random() * 26;
         }
       }
+      forkActive = fon && fz > -120 && fz < 30;     // bu civarda sağ bariyer açılır
       if (fon) {
         fblink += dt; fz += sp * dt;
         F.grp.visible = true;
@@ -1309,7 +1344,34 @@
         if (fz > 40) { fon = false; F.grp.visible = false; }
       }
     }
-    function reset() { fon = false; F.grp.visible = false; ft = 22 + Math.random() * 22; }
+    function reset() { fon = false; forkActive = false; F.grp.visible = false; ft = 22 + Math.random() * 22; }
+    return { update, reset };
+  })();
+
+  // ----------------------------- Karşı yönden gelen trafik (bölünmüş yol) -----------------------------
+  const ONCOMING = (function () {
+    const pool = [];
+    for (let i = 0; i < 8; i++) {
+      const r = Math.random(), kind = r < 0.2 ? 'truck' : (r < 0.55 ? 'sedan' : 'car');
+      const hex = TRAFFIC_HEX[(Math.random() * TRAFFIC_HEX.length) | 0];
+      const m = kind === 'truck' ? buildTruck(hex) : (kind === 'sedan' ? buildSedan(hex) : buildCar(hex));
+      const hl = new THREE.MeshStandardMaterial({ color: 0xfff6d8, emissive: 0xfff2c8, emissiveIntensity: 1.5, roughness: 0.4 });
+      const nose = kind === 'truck' ? -3.2 : -2.0;
+      for (const hx of [-0.7, 0.7]) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), hl); s.position.set(hx, 0.7, nose); m.add(s); }
+      m.rotation.y = Math.PI;          // karşıdan gelir (kameraya bakar)
+      m.position.set(OPP_C + laneX(i % LANES), 0, -70 - i * 36);
+      scene.add(m);
+      pool.push({ model: m, kind, lane: i % LANES, z: -70 - i * 36, spd: MAX_SPEED * (0.4 + Math.random() * 0.45) });
+    }
+    function place(o) { o.model.position.set(OPP_C + laneX(o.lane) + offX(o.z), offY(o.z), o.z); }
+    function update(dt, sp) {
+      for (const o of pool) {
+        o.z += (sp + o.spd) * dt;       // kapanış hızı = oyuncu + kendi hızı
+        if (o.z > 46) { o.z = -300 - Math.random() * 150; o.lane = (Math.random() * LANES) | 0; o.spd = MAX_SPEED * (0.4 + Math.random() * 0.45); }
+        place(o);
+      }
+    }
+    function reset() { for (let i = 0; i < pool.length; i++) { pool[i].z = -70 - i * 36; place(pool[i]); } }
     return { update, reset };
   })();
 
@@ -1543,7 +1605,7 @@
     player.x = 0; player.vx = 0; player.lane = 1; player.speed = 0; player.steer = 0; player.grip = 0.35; player.highBeam = false;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
     player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
-    ENV.reset(); RADAR.reset(); PROPS.reset(); SIDEFX.reset(); BRIDGE.reset(); FORK.reset();
+    ENV.reset(); RADAR.reset(); PROPS.reset(); SIDEFX.reset(); BRIDGE.reset(); FORK.reset(); ONCOMING.reset();
     routeIdx = -1; curRegion = REGIONS.marmara;
     curveMul = curRegion.curve; hillMul = curRegion.hill;
     grassCol.set(curRegion.ground); targetGround.set(curRegion.ground);
