@@ -329,6 +329,25 @@
     box(0.16, 0.16, 0.1, dark, 0.55, 0.35, 2.18);
     box(0.16, 0.16, 0.1, dark, -0.55, 0.35, 2.18);
 
+    // --- panel derz (birleşim) çizgileri: kapı, kaput, bagaj, tampon ---
+    const seamMat = new THREE.MeshStandardMaterial({ color: 0x14161a, roughness: 0.9 });
+    function seam(w, h, d, x, y, z) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), seamMat);
+      m.position.set(x, y, z); g.add(m);
+    }
+    seam(1.5, 0.03, 0.045, 0, 1.225, 0.86);      // bagaj kapağı ön derzi
+    seam(0.045, 0.03, 1.0, 0.72, 1.225, 1.4);    // bagaj yan derzleri
+    seam(0.045, 0.03, 1.0, -0.72, 1.225, 1.4);
+    seam(1.5, 0.03, 0.045, 0, 1.225, -1.18);     // kaput arka derzi
+    seam(0.045, 0.03, 0.8, 0.72, 1.225, -1.6);
+    seam(0.045, 0.03, 0.8, -0.72, 1.225, -1.6);
+    seam(1.74, 0.035, 0.03, 0, 0.52, 2.16);      // arka tampon derzi
+    seam(1.74, 0.035, 0.03, 0, 0.52, -2.16);     // ön tampon derzi
+    seam(0.03, 0.55, 0.04, 0.985, 0.7, 0.1);     // kapı bölme çizgisi (sağ)
+    seam(0.03, 0.55, 0.04, -0.985, 0.7, 0.1);    // (sol)
+    seam(0.03, 0.04, 3.4, 0.985, 0.92, -0.05);   // yan karakter/bel hattı (sağ)
+    seam(0.03, 0.04, 3.4, -0.985, 0.92, -0.05);  // (sol)
+
     // tekerlekler
     const wheelGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.34, 18);
     wheelGeo.rotateZ(Math.PI / 2);
@@ -400,6 +419,27 @@
       new THREE.MeshStandardMaterial({ color: 0x2a6cc4, metalness: 0.7, roughness: 0.3 }));
     badge.rotation.x = Math.PI / 2; badge.position.set(0, 1.0, -2.05); g.add(badge);
 
+    // --- panel derz (birleşim) çizgileri ---
+    const seamMat = new THREE.MeshStandardMaterial({ color: 0x121419, roughness: 0.9 });
+    function seam(w, h, d, x, y, z) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), seamMat);
+      m.position.set(x, y, z); g.add(m);
+    }
+    seam(1.5, 0.03, 0.045, 0, 1.19, 1.24);       // bagaj kapağı derzi
+    seam(0.045, 0.03, 1.0, 0.7, 1.19, 1.82);
+    seam(0.045, 0.03, 1.0, -0.7, 1.19, 1.82);
+    seam(1.5, 0.03, 0.045, 0, 1.19, -1.34);      // kaput derzi
+    seam(0.045, 0.03, 0.9, 0.7, 1.19, -1.88);
+    seam(0.045, 0.03, 0.9, -0.7, 1.19, -1.88);
+    seam(1.72, 0.035, 0.03, 0, 0.5, 2.4);        // arka tampon derzi
+    seam(1.72, 0.035, 0.03, 0, 0.5, -2.4);       // ön tampon derzi
+    seam(0.03, 0.6, 0.04, 0.985, 0.78, -0.5);    // ön kapı (sağ)
+    seam(0.03, 0.6, 0.04, -0.985, 0.78, -0.5);
+    seam(0.03, 0.6, 0.04, 0.985, 0.78, 0.62);    // arka kapı (sağ)
+    seam(0.03, 0.6, 0.04, -0.985, 0.78, 0.62);
+    seam(0.03, 0.04, 3.7, 0.985, 1.07, -0.02);   // yan bel hattı
+    seam(0.03, 0.04, 3.7, -0.985, 1.07, -0.02);
+
     // tekerlekler (uzun aks)
     const wheelGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.34, 18); wheelGeo.rotateZ(Math.PI / 2);
     const tireMat = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.85 });
@@ -436,6 +476,13 @@
     const tailMat = new THREE.MeshStandardMaterial({ color: 0xd61f1f, emissive: 0xc01010, emissiveIntensity: 0.55 });
     box(0.42, 0.3, 0.06, tailMat, 0.85, 0.6, 3.4);
     box(0.42, 0.3, 0.06, tailMat, -0.85, 0.6, 3.4);
+    // panel derzleri (kasa kapı çizgisi + tampon)
+    const seamMat = new THREE.MeshStandardMaterial({ color: 0x9a9ea3, roughness: 0.85 });
+    const sBox = (w, h, d, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), seamMat); m.position.set(x, y, z); g.add(m); };
+    sBox(0.05, 2.5, 0.04, 0, 1.9, 3.43);          // kasa arka kapı orta çizgisi
+    sBox(2.2, 0.05, 0.04, 0, 1.9, 3.43);          // yatay
+    sBox(0.04, 2.4, 0.05, 1.12, 1.9, 0.7);        // kasa yan derz (sağ)
+    sBox(0.04, 2.4, 0.05, -1.12, 1.9, 0.7);       // (sol)
     const wg = new THREE.CylinderGeometry(0.55, 0.55, 0.4, 18); wg.rotateZ(Math.PI / 2);
     const tire = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.85 });
     const wheels = [];
