@@ -14,6 +14,7 @@
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.setClearColor(0x0d1430, 1);
 
   const scene = new THREE.Scene();
   const HORIZON = new THREE.Color('#bfe0f5');
@@ -22,23 +23,38 @@
   const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 2000);
   camera.position.set(0, 4.3, 9);
 
-  // Gökyüzü (gradyan, scene.background)
-  scene.background = makeSkyTexture();
+  // Gökyüzü: zamanla renk değiştiren shader gök kubbe (gradyan)
+  const skyUniforms = {
+    topColor: { value: new THREE.Color('#1e4f9e') },
+    bottomColor: { value: new THREE.Color('#bfe0f5') },
+    exponent: { value: 0.7 }
+  };
+  const sky = new THREE.Mesh(
+    new THREE.SphereGeometry(900, 24, 14),
+    new THREE.ShaderMaterial({
+      uniforms: skyUniforms, side: THREE.BackSide, depthWrite: false, fog: false,
+      vertexShader: 'varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform vec3 topColor; uniform vec3 bottomColor; uniform float exponent; varying vec3 vP; void main(){ float h = normalize(vP).y; float t = pow(max(h,0.0), exponent); gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0); }'
+    })
+  );
+  sky.renderOrder = -1;
+  scene.add(sky);
 
-  function makeSkyTexture() {
-    const c = document.createElement('canvas');
-    c.width = 16; c.height = 256;
-    const g = c.getContext('2d');
-    const grd = g.createLinearGradient(0, 0, 0, 256);
-    grd.addColorStop(0.0, '#1e4f9e');
-    grd.addColorStop(0.45, '#5a93d8');
-    grd.addColorStop(0.75, '#9cc6ec');
-    grd.addColorStop(1.0, '#bfe0f5');
-    g.fillStyle = grd; g.fillRect(0, 0, 16, 256);
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    return tex;
+  // Yıldızlar (gece görünür)
+  const starGeo = new THREE.BufferGeometry();
+  const starArr = new Float32Array(700 * 3);
+  for (let i = 0; i < 700; i++) {
+    const u = Math.random(), v = Math.random() * 0.5;   // üst yarıküre
+    const th = u * Math.PI * 2, ph = Math.acos(1 - v);
+    const r = 850;
+    starArr[i * 3] = r * Math.sin(ph) * Math.cos(th);
+    starArr[i * 3 + 1] = r * Math.cos(ph);
+    starArr[i * 3 + 2] = r * Math.sin(ph) * Math.sin(th);
   }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starArr, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 2.4, sizeAttenuation: false, transparent: true, opacity: 0, depthWrite: false, fog: false });
+  const stars = new THREE.Points(starGeo, starMat);
+  scene.add(stars);
 
   // ----------------------------- Işık -----------------------------
   const hemi = new THREE.HemisphereLight(0xbfe0f5, 0x3a6b39, 0.95);
@@ -53,6 +69,120 @@
   sun.shadow.bias = -0.0004;
   scene.add(sun);
   scene.add(sun.target);
+
+  // ----------------------------- Çevre: gece-gündüz + hava -----------------------------
+  // HUD saat & hava kartları
+  let clockEl = null, wxEl = null;
+  {
+    const hudEl = document.getElementById('hud');
+    if (hudEl) {
+      const c1 = document.createElement('div'); c1.className = 'hud-card';
+      c1.innerHTML = '<span class="hud-label">SAAT</span><span class="hud-value" id="clock">--:--</span>';
+      hudEl.appendChild(c1); clockEl = c1.querySelector('#clock');
+      const c2 = document.createElement('div'); c2.className = 'hud-card';
+      c2.innerHTML = '<span class="hud-label">HAVA</span><span class="hud-value" id="wx">☀️</span>';
+      hudEl.appendChild(c2); wxEl = c2.querySelector('#wx');
+    }
+  }
+
+  const ENV = (function () {
+    const KEYS = [
+      { h: 0,  top: '#070b1a', bot: '#0d1430', sun: '#3a4a7a', sunI: 0.04, hemiI: 0.16, hs: '#10182f', hg: '#0a0f08', fog: '#0d1430', night: 1 },
+      { h: 5,  top: '#13204a', bot: '#33507e', sun: '#6a6a9a', sunI: 0.20, hemiI: 0.32, hs: '#2a3552', hg: '#16180f', fog: '#33507e', night: 0.82 },
+      { h: 7,  top: '#3a5a9e', bot: '#f0b888', sun: '#ffd0a0', sunI: 1.00, hemiI: 0.70, hs: '#a8bcdc', hg: '#3a4a30', fog: '#f0c098', night: 0.2 },
+      { h: 12, top: '#1e4f9e', bot: '#bfe0f5', sun: '#fff1d8', sunI: 1.70, hemiI: 0.95, hs: '#bfe0f5', hg: '#3a6b39', fog: '#bfe0f5', night: 0 },
+      { h: 17, top: '#235a9e', bot: '#cfe2ec', sun: '#ffe6c0', sunI: 1.40, hemiI: 0.85, hs: '#cfe2ec', hg: '#3a6b39', fog: '#cfe2ec', night: 0 },
+      { h: 19, top: '#2a3f8e', bot: '#f0a060', sun: '#ff8a40', sunI: 0.90, hemiI: 0.60, hs: '#caa0a0', hg: '#34402c', fog: '#e88a60', night: 0.3 },
+      { h: 21, top: '#101a3a', bot: '#2a2444', sun: '#5a4a8a', sunI: 0.18, hemiI: 0.30, hs: '#241f3a', hg: '#0f0f10', fog: '#241f3a', night: 0.85 },
+      { h: 24, top: '#070b1a', bot: '#0d1430', sun: '#3a4a7a', sunI: 0.04, hemiI: 0.16, hs: '#10182f', hg: '#0a0f08', fog: '#0d1430', night: 1 }
+    ];
+    const top = new THREE.Color(), bot = new THREE.Color(), sunC = new THREE.Color(), hsC = new THREE.Color(), hgC = new THREE.Color(), fogC = new THREE.Color();
+    const A = new THREE.Color();
+    const cur = { sunI: 1, hemiI: 0.9, night: 0 };
+    function sample(h) {
+      let i = 0; while (i < KEYS.length - 1 && h >= KEYS[i + 1].h) i++;
+      const k0 = KEYS[i], k1 = KEYS[Math.min(i + 1, KEYS.length - 1)];
+      const span = (k1.h - k0.h) || 1, t = Math.min(1, Math.max(0, (h - k0.h) / span));
+      top.set(k0.top).lerp(A.set(k1.top), t);
+      bot.set(k0.bot).lerp(A.set(k1.bot), t);
+      sunC.set(k0.sun).lerp(A.set(k1.sun), t);
+      hsC.set(k0.hs).lerp(A.set(k1.hs), t);
+      hgC.set(k0.hg).lerp(A.set(k1.hg), t);
+      fogC.set(k0.fog).lerp(A.set(k1.fog), t);
+      cur.sunI = k0.sunI + (k1.sunI - k0.sunI) * t;
+      cur.hemiI = k0.hemiI + (k1.hemiI - k0.hemiI) * t;
+      cur.night = k0.night + (k1.night - k0.night) * t;
+    }
+
+    let tod = Math.random() * 24;        // rastgele başlangıç saati
+    const DAY_LEN = 360;                 // tam gün ~6 dk (kademeli)
+    const weather = { wet: 0, target: 0, timer: 12 + Math.random() * 15 };
+
+    // Yağmur (eğik çizgiler)
+    const RN = 420, rainPos = new Float32Array(RN * 2 * 3), drop = [];
+    for (let i = 0; i < RN; i++) drop.push({ x: (Math.random() - 0.5) * 60, y: Math.random() * 42, z: -50 + Math.random() * 64, v: 40 + Math.random() * 24 });
+    const rainGeo = new THREE.BufferGeometry(); rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
+    const rainMat = new THREE.LineBasicMaterial({ color: 0xbcd2ec, transparent: true, opacity: 0, fog: false });
+    const rainObj = new THREE.LineSegments(rainGeo, rainMat); rainObj.frustumCulled = false; scene.add(rainObj);
+    function updateRain(dt) {
+      if (weather.wet < 0.03) { rainObj.visible = false; return; }
+      rainObj.visible = true; rainMat.opacity = weather.wet * 0.6;
+      rainObj.position.set(camera.position.x, 0, camera.position.z);
+      for (let i = 0; i < RN; i++) {
+        const d = drop[i]; d.y -= d.v * dt; if (d.y < 0) { d.y = 42; d.x = (Math.random() - 0.5) * 60; d.z = -50 + Math.random() * 64; }
+        const o = i * 6;
+        rainPos[o] = d.x; rainPos[o + 1] = d.y; rainPos[o + 2] = d.z;
+        rainPos[o + 3] = d.x + 1.2; rainPos[o + 4] = d.y - 2.6; rainPos[o + 5] = d.z;
+      }
+      rainGeo.attributes.position.needsUpdate = true;
+    }
+
+    // Gece farı
+    const headlight = new THREE.SpotLight(0xfff0d0, 0, 80, Math.PI / 5, 0.5, 1.2);
+    scene.add(headlight); scene.add(headlight.target);
+
+    function update(dt) {
+      tod = (tod + dt * 24 / DAY_LEN) % 24;
+      weather.timer -= dt;
+      if (weather.timer <= 0) { weather.target = Math.random() < 0.4 ? 1 : 0; weather.timer = 25 + Math.random() * 40; }
+      weather.wet += (weather.target - weather.wet) * Math.min(1, dt * 0.25);
+      const wet = weather.wet, cloud = 1 - wet * 0.45;
+      sample(tod);
+
+      skyUniforms.topColor.value.copy(top).multiplyScalar(cloud);
+      skyUniforms.bottomColor.value.copy(bot).multiplyScalar(cloud);
+      sky.position.copy(camera.position); stars.position.copy(camera.position);
+      starMat.opacity = cur.night * (1 - wet) * 0.9;
+
+      sun.color.copy(sunC); sun.intensity = cur.sunI * cloud;
+      hemi.color.copy(hsC); hemi.groundColor.copy(hgC); hemi.intensity = cur.hemiI * cloud;
+      const px = player.model ? player.model.position.x : 0;
+      const elev = Math.sin((tod - 6) / 12 * Math.PI), az = (tod - 6) / 12 * Math.PI;
+      sun.position.set(px + Math.cos(az) * -44, Math.max(3, elev * 60 + 6), 18 + Math.sin(az) * 10);
+
+      scene.fog.color.copy(fogC).multiplyScalar(cloud);
+      scene.fog.near = 60;
+      scene.fog.far = 430 - cur.night * 120 - wet * 150;
+
+      const dark = Math.max(cur.night, wet * 0.4);
+      headlight.intensity = dark * 5.5;
+      headlight.position.set(px, 1.4, -1);
+      headlight.target.position.set(px, 0.2, -24);
+
+      if (typeof roadRibbon !== 'undefined' && roadRibbon) {
+        roadRibbon.material.color.setScalar(1 - wet * 0.32);
+        roadRibbon.material.roughness = 0.85 - wet * 0.4;
+      }
+      Audio.rain(wet);
+
+      if (clockEl) { const hh = Math.floor(tod), mm = Math.floor((tod % 1) * 60); clockEl.textContent = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); }
+      if (wxEl) wxEl.textContent = wet > 0.5 ? '🌧️' : (cur.night > 0.6 ? '🌙' : (cur.night > 0.25 ? '🌆' : '☀️'));
+
+      updateRain(dt);
+    }
+    function reset() { tod = Math.random() * 24; weather.wet = 0; weather.target = 0; weather.timer = 12 + Math.random() * 15; }
+    return { update, reset };
+  })();
 
   // ----------------------------- Yol -----------------------------
   const LANES = 3;
@@ -496,7 +626,20 @@
         o.connect(lp); lp.connect(g); g.connect(master); o.start(); o.stop(A.currentTime + dur);
       });
     }
-    return { init: () => { ensure(); if (A && A.state === 'suspended') A.resume(); }, startEngine, stopEngine, engine, coin, crash, level, ui, flash, horn, toggle: () => { enabled = !enabled; return enabled; } };
+    let rainSrc = null, rainGain = null;
+    function rain(level) {
+      ensure(); if (!A) return;
+      if (!rainSrc) {
+        const buf = A.createBuffer(1, A.sampleRate * 2, A.sampleRate); const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 0.5;
+        rainSrc = A.createBufferSource(); rainSrc.buffer = buf; rainSrc.loop = true;
+        const bp = A.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 0.4;
+        rainGain = A.createGain(); rainGain.gain.value = 0;
+        rainSrc.connect(bp); bp.connect(rainGain); rainGain.connect(master); rainSrc.start();
+      }
+      rainGain.gain.setTargetAtTime(enabled ? level * 0.16 : 0, A.currentTime, 0.4);
+    }
+    return { init: () => { ensure(); if (A && A.state === 'suspended') A.resume(); }, startEngine, stopEngine, engine, coin, crash, level, ui, flash, horn, rain, toggle: () => { enabled = !enabled; return enabled; } };
   })();
 
   // ----------------------------- HUD / Menü -----------------------------
@@ -556,6 +699,7 @@
     player.x = 0; player.lane = 1; player.speed = 0; player.steer = 0;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
     player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
+    ENV.reset();
     spawnTraffic();
     for (const co of coins) { co.taken = false; co.model.visible = true; co.z = -40 - Math.random() * 200; co.lane = (Math.random() * LANES) | 0; co.model.position.x = laneX(co.lane); }
     state = State.PLAY;
@@ -685,6 +829,8 @@
     camera.position.y = 4.3 + (Math.random() - 0.5) * sh;
     camera.rotation.z += (Math.random() - 0.5) * sh * 0.04;
 
+    ENV.update(dt);
+
     if (crash.timer <= 0 && !crash.ended) {
       crash.ended = true;
       // kalan parçacıkları temizle
@@ -810,6 +956,7 @@
     if (speedEl) speedEl.innerHTML = Math.floor(sp / MAX_SPEED * 260) + '<small>km/s</small>';
 
     updatePops(dt);
+    ENV.update(dt);
   }
 
   // Menüde sahneyi canlı tut (yavaş ilerle)
@@ -823,6 +970,7 @@
     camera.position.y += ((4.3 + offY(9)) - camera.position.y) * 0.06;
     camera.lookAt(offX(-16), 1.5 + offY(-16) * 0.9, -16);
     player.model.position.set(0, 0, 0); player.model.rotation.set(0, 0, 0);
+    ENV.update(dt);
   }
 
   function updatePops(dt) {
