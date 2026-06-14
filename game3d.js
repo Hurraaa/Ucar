@@ -61,30 +61,42 @@
   const ROAD_LEN = 640;
   const laneX = (i) => (i - (LANES - 1) / 2) * LANE_W;  // şerit merkez x
 
-  // Çimen zemini
-  const grass = new THREE.Mesh(
-    new THREE.PlaneGeometry(600, ROAD_LEN + 200),
-    new THREE.MeshStandardMaterial({ color: 0x4aa84f, roughness: 1 })
-  );
-  grass.rotation.x = -Math.PI / 2;
-  grass.position.z = -(ROAD_LEN / 2) + 30;
-  grass.receiveShadow = true;
-  scene.add(grass);
+  // ---- Viraj & yokuş eğrileri: mesafeye göre yatay (offX) / dikey (offY) ofset ----
+  // Oyuncu hep dünya merkezinde; yol etrafında kıvrılıp alçalır/yükselir.
+  const CURVE_AMP = 17, HILL_AMP = 6;
+  function curveX(s) { return CURVE_AMP * (Math.sin(s * 0.0021) + 0.45 * Math.sin(s * 0.00105 + 1.3)); }
+  function hillY(s) { return HILL_AMP * (Math.sin(s * 0.0016) + 0.55 * Math.sin(s * 0.00072 + 0.7)); }
+  function offX(z) { return curveX(dist - z) - curveX(dist); }
+  function offY(z) { return hillY(dist - z) - hillY(dist); }
 
-  // Yol (kaydırılan dokulu plane)
-  const roadTex = makeRoadTexture();
-  roadTex.wrapS = THREE.ClampToEdgeWrapping;
-  roadTex.wrapT = THREE.RepeatWrapping;
   const SEG_WORLD = 16;                    // bir doku tekrarının dünya uzunluğu
-  roadTex.repeat.set(1, ROAD_LEN / SEG_WORLD);
-  const road = new THREE.Mesh(
-    new THREE.PlaneGeometry(ROAD_W + 1.6, ROAD_LEN),
-    new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 })
-  );
-  road.rotation.x = -Math.PI / 2;
-  road.position.set(0, 0.01, -(ROAD_LEN / 2) + 30);
-  road.receiveShadow = true;
-  scene.add(road);
+  const RIBBON_Z0 = 26, RIBBON_Z1 = -486;  // şeridin yakın/uzak ucu (viewZ)
+
+  // Bükülen şerit: düz geometri kur, her kare vertexleri eğriye göre kaydır
+  function buildRibbon(width, mat, yBase, lenSegs) {
+    const geo = new THREE.PlaneGeometry(width, RIBBON_Z0 - RIBBON_Z1, 1, lenSegs);
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, 0, (RIBBON_Z0 + RIBBON_Z1) / 2);
+    const pos = geo.attributes.position;
+    const baseX = new Float32Array(pos.count), baseZ = new Float32Array(pos.count);
+    for (let i = 0; i < pos.count; i++) { baseX[i] = pos.getX(i); baseZ[i] = pos.getZ(i); }
+    const mesh = new THREE.Mesh(geo, mat); mesh.receiveShadow = true;
+    mesh.userData = { baseX, baseZ, yBase };
+    scene.add(mesh); return mesh;
+  }
+  function updateRibbon(mesh) {
+    const u = mesh.userData, pos = mesh.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) { const z = u.baseZ[i]; pos.setX(i, u.baseX[i] + offX(z)); pos.setY(i, u.yBase + offY(z)); }
+    pos.needsUpdate = true; mesh.geometry.computeVertexNormals();
+  }
+
+  // Çimen + yol şeritleri
+  const grassRibbon = buildRibbon(240, new THREE.MeshStandardMaterial({ color: 0x4aa84f, roughness: 1 }), -0.02, 48);
+  const roadTex = makeRoadTexture();
+  roadTex.wrapS = THREE.ClampToEdgeWrapping; roadTex.wrapT = THREE.RepeatWrapping;
+  roadTex.repeat.set(1, (RIBBON_Z0 - RIBBON_Z1) / SEG_WORLD);
+  const roadRibbon = buildRibbon(ROAD_W + 1.6, new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 }), 0.02, 96);
+  function updateRibbons() { updateRibbon(grassRibbon); updateRibbon(roadRibbon); }
 
   function makeRoadTexture() {
     const c = document.createElement('canvas');
@@ -640,7 +652,7 @@
     crash.worldSpd *= Math.pow(0.06, dt);
     const ws = crash.worldSpd;
     roadTex.offset.y -= ws * dt / SEG_WORLD;
-    for (const tr of trees) { tr.z += ws * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.z = tr.z; }
+    for (const tr of trees) { tr.z += ws * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z); }
 
     // oyuncu arabası savrulur
     crash.vy -= 24 * dt;
@@ -712,19 +724,20 @@
     if (dist > level * 3000) advanceLevel();
     score += sp * dt * 0.05;
 
-    // yol dokusu kaydır
+    // yol dokusu kaydır + yolu/çimeni eğriye göre büker
     roadTex.offset.y -= sp * dt / SEG_WORLD;
+    updateRibbons();
 
-    // ağaçlar / coinler dünyayla birlikte yaklaşsın (+z)
+    // ağaçlar / coinler dünyayla birlikte yaklaşsın (+z), eğriyi takip eder
     for (const tr of trees) {
       tr.z += sp * dt;
-      if (tr.z > 25) { tr.z -= 22 * trees.length / 2 + Math.random() * 30; tr.model.position.x = (Math.random() < 0.5 ? -1 : 1) * (ROAD_W / 2 + 4 + Math.random() * 14); }
-      tr.model.position.z = tr.z;
+      if (tr.z > 25) { tr.z -= 22 * trees.length / 2 + Math.random() * 30; tr.x = (Math.random() < 0.5 ? -1 : 1) * (ROAD_W / 2 + 4 + Math.random() * 14); }
+      tr.model.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z);
     }
     for (const co of coins) {
       co.z += sp * dt;
-      if (co.z > 14) { co.z -= 30 * coins.length; co.taken = false; co.model.visible = true; co.lane = (Math.random() * LANES) | 0; co.model.position.x = laneX(co.lane); }
-      co.model.position.z = co.z;
+      if (co.z > 14) { co.z -= 30 * coins.length; co.taken = false; co.model.visible = true; co.lane = (Math.random() * LANES) | 0; }
+      co.model.position.set(laneX(co.lane) + offX(co.z), 1.1 + offY(co.z), co.z);
       co.model.rotation.z += dt * 4;
       if (!co.taken && Math.abs(co.z) < 1.8 && Math.abs(laneX(co.lane) - player.x) < 1.4) {
         co.taken = true; co.model.visible = false; score += 25; Audio.coin(); pushPop('+25');
@@ -755,16 +768,20 @@
     }
     // trafik — 3) modeli yerleştir, teker, çarpışma
     for (const car of traffic) {
-      car.model.position.set(laneX(car.lane), 0, car.z);
+      car.model.position.set(laneX(car.lane) + offX(car.z), offY(car.z), car.z);
+      car.model.rotation.y = -Math.atan2(offX(car.z - 4) - offX(car.z), 4);  // viraja göre yönelim
       const roll = (sp - car.spd) * dt / 0.46;
       for (const wgrp of car.model.userData.wheels) wgrp.children[0].rotation.x += roll;
       if (Math.abs(car.z) < 3.6 && Math.abs(laneX(car.lane) - player.x) < 1.7 && sp > MAX_SPEED * 0.1) { doCrash(); break; }
     }
 
     // oyuncu model güncelle
+    const bank = Math.atan2(offX(-8), 8);      // viraj eğimi
+    const pitch = Math.atan2(offY(-5), 5);     // yokuş eğimi
     player.model.position.x = player.x;
-    player.model.rotation.y = -player.steer * 0.12;
-    player.model.rotation.z = -player.steer * 0.05;
+    player.model.rotation.y = -player.steer * 0.12 - bank * 0.5;
+    player.model.rotation.z = -player.steer * 0.05 - bank * 0.3;
+    player.model.rotation.x = -pitch * 0.8;
     const wr = sp * dt / 0.46;
     for (const wgrp of player.model.userData.wheels) wgrp.children[0].rotation.x -= wr;
     // hafif zıplama
@@ -777,12 +794,12 @@
     flashLight.position.x = player.x;
     flashLight.intensity = flashTimer > 0 ? (3.5 * (flashTimer / 0.4)) * (0.6 + 0.4 * Math.sin(performance.now() * 0.08)) : 0;
 
-    // kamera takip
-    camera.position.x += (player.x * 0.55 - camera.position.x) * Math.min(1, dt * 6);
-    camera.position.y += (4.3 - camera.position.y) * 0.1;
+    // kamera takip (viraj ve yokuşa göre yönelir)
+    camera.position.x += ((player.x * 0.5 + offX(9) * 0.6) - camera.position.x) * Math.min(1, dt * 6);
+    camera.position.y += ((4.3 + offY(9)) - camera.position.y) * 0.12;
     camera.position.z = 9;
-    camera.lookAt(player.x * 0.35, 1.4, -14);
-    camera.rotation.z += (-player.steer * 0.03 - camera.rotation.z) * 0.1;
+    camera.lookAt(player.x * 0.3 + offX(-16), 1.5 + offY(-16) * 0.9, -16);
+    camera.rotation.z += ((-player.steer * 0.03 - Math.atan2(offX(-20), 20) * 0.25) - camera.rotation.z) * 0.1;
     sun.target.position.set(player.x, 0, -6); sun.position.set(player.x - 26, 40, 18);
 
     // motor sesi
@@ -797,11 +814,15 @@
 
   // Menüde sahneyi canlı tut (yavaş ilerle)
   function idle(dt) {
+    dist += 30 * dt;
     roadTex.offset.y -= 30 * dt / SEG_WORLD;
-    for (const tr of trees) { tr.z += 30 * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.z = tr.z; }
-    camera.position.x += (Math.sin(performance.now() * 0.0003) * 1.5 - camera.position.x) * 0.02;
-    camera.lookAt(0, 1.4, -14);
-    player.model.position.x = 0;
+    updateRibbons();
+    for (const tr of trees) { tr.z += 30 * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.set(tr.x + offX(tr.z), offY(tr.z), tr.z); }
+    for (const co of coins) { co.model.position.set(laneX(co.lane) + offX(co.z), 1.1 + offY(co.z), co.z); co.model.rotation.z += dt * 3; }
+    camera.position.x += ((offX(9) * 0.6) - camera.position.x) * 0.04;
+    camera.position.y += ((4.3 + offY(9)) - camera.position.y) * 0.06;
+    camera.lookAt(offX(-16), 1.5 + offY(-16) * 0.9, -16);
+    player.model.position.set(0, 0, 0); player.model.rotation.set(0, 0, 0);
   }
 
   function updatePops(dt) {
