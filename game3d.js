@@ -294,8 +294,9 @@
     const g = new THREE.Group();
     const paint = new THREE.MeshPhysicalMaterial({ color: colorHex, metalness: 0.5, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.18 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x14161b, metalness: 0.3, roughness: 0.6 });
-    const glass = new THREE.MeshPhysicalMaterial({ color: 0x121d27, metalness: 0.2, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x5c7488, metalness: 0, roughness: 0.08, transparent: true, opacity: 0.38, clearcoat: 1, clearcoatRoughness: 0.05 });
     const chrome = new THREE.MeshStandardMaterial({ color: 0xcfd4da, metalness: 0.95, roughness: 0.2 });
+    const interior = new THREE.MeshStandardMaterial({ color: 0x33373d, roughness: 0.85 });
 
     function box(w, h, d, mat, x, y, z) {
       const m = new THREE.Mesh(roundedBox(w, h, d), mat);
@@ -306,14 +307,15 @@
     box(1.95, 0.55, 4.3, paint, 0, 0.62, 0);
     // üst gövde / omuz
     box(1.92, 0.42, 3.9, paint, 0, 1.0, -0.05);
-    // kabin (coupe, hafif arkaya kaçık)
-    const cabin = box(1.66, 0.62, 1.95, paint, 0, 1.42, -0.15);
-    cabin.scale.z = 1;
-    // camlar (kabinin biraz içinde, koyu)
-    box(1.5, 0.5, 0.12, glass, 0, 1.45, 0.83);   // arka cam
-    box(1.5, 0.5, 0.12, glass, 0, 1.45, -1.12);  // ön cam
-    box(0.12, 0.45, 1.7, glass, 0.8, 1.45, -0.15);
-    box(0.12, 0.45, 1.7, glass, -0.8, 1.45, -0.15);
+    // iç döşeme (camlardan görünür, koyu gri)
+    box(1.4, 0.34, 1.7, interior, 0, 1.26, -0.15);
+    // kabin: saydam cam sera + gövde renginde tavan + ince direkler
+    box(1.6, 0.6, 1.92, glass, 0, 1.44, -0.15);           // saydam sera (tüm camlar)
+    box(1.52, 0.12, 1.55, paint, 0, 1.75, -0.15);         // gövde renginde tavan
+    box(0.1, 0.58, 0.12, paint, 0.79, 1.44, 0.78);        // C direkleri
+    box(0.1, 0.58, 0.12, paint, -0.79, 1.44, 0.78);
+    box(0.1, 0.58, 0.12, paint, 0.79, 1.44, -1.05);       // A direkleri
+    box(0.1, 0.58, 0.12, paint, -0.79, 1.44, -1.05);
     // ördek-kuyruğu spoiler
     box(1.8, 0.1, 0.4, paint, 0, 1.28, 1.85);
 
@@ -351,9 +353,10 @@
     const g = new THREE.Group();
     const paint = new THREE.MeshPhysicalMaterial({ color: colorHex, metalness: 0.45, roughness: 0.26, clearcoat: 1, clearcoatRoughness: 0.16 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.3, roughness: 0.7 });
-    const glass = new THREE.MeshPhysicalMaterial({ color: 0x18242e, metalness: 0.2, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.05 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x5c7488, metalness: 0, roughness: 0.08, transparent: true, opacity: 0.38, clearcoat: 1, clearcoatRoughness: 0.05 });
     const chrome = new THREE.MeshStandardMaterial({ color: 0xd6dbe2, metalness: 0.95, roughness: 0.18 });
     const head = new THREE.MeshStandardMaterial({ color: 0xeaf2ff, metalness: 0.6, roughness: 0.2, emissive: 0x223044, emissiveIntensity: 0.5 });
+    const interior = new THREE.MeshStandardMaterial({ color: 0x33373d, roughness: 0.85 });
 
     function box(w, h, d, mat, x, y, z) {
       const m = new THREE.Mesh(roundedBox(w, h, d), mat);
@@ -363,12 +366,15 @@
     // 3-box gövde (uzun, dik)
     box(1.94, 0.64, 4.78, paint, 0, 0.68, 0);          // alt gövde
     box(1.9, 0.32, 4.5, paint, 0, 1.02, 0);            // omuz şeridi
-    box(1.66, 0.74, 2.55, paint, 0, 1.46, -0.05);      // kabin (dik greenhouse)
-    // camlar (geniş, dik)
-    box(1.52, 0.62, 0.1, glass, 0, 1.49, -1.33);       // ön cam (ön = -z)
-    box(1.52, 0.56, 0.1, glass, 0, 1.49, 1.2);         // arka cam
-    box(0.1, 0.5, 2.15, glass, 0.82, 1.5, -0.05);
-    box(0.1, 0.5, 2.15, glass, -0.82, 1.5, -0.05);
+    // iç döşeme (camlardan görünür)
+    box(1.42, 0.4, 2.2, interior, 0, 1.28, -0.05);
+    // kabin: saydam cam sera + gövde renginde tavan + ince direkler
+    box(1.62, 0.72, 2.5, glass, 0, 1.46, -0.05);       // saydam sera (tüm camlar)
+    box(1.54, 0.12, 2.05, paint, 0, 1.8, -0.05);       // gövde renginde tavan
+    box(0.1, 0.7, 0.14, paint, 0.81, 1.46, -1.28);     // A direkleri
+    box(0.1, 0.7, 0.14, paint, -0.81, 1.46, -1.28);
+    box(0.1, 0.7, 0.14, paint, 0.81, 1.46, 1.15);      // C direkleri
+    box(0.1, 0.7, 0.14, paint, -0.81, 1.46, 1.15);
     // bagaj dudağı
     box(1.7, 0.07, 0.22, paint, 0, 1.1, 2.32);
 
@@ -418,7 +424,7 @@
     const paint = new THREE.MeshPhysicalMaterial({ color: colorHex, metalness: 0.4, roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.3 });
     const cargo = new THREE.MeshStandardMaterial({ color: 0xe2e6ea, metalness: 0.1, roughness: 0.65 });
     const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.3, roughness: 0.7 });
-    const glass = new THREE.MeshPhysicalMaterial({ color: 0x18242e, metalness: 0.2, roughness: 0.08, clearcoat: 1, clearcoatRoughness: 0.06 });
+    const glass = new THREE.MeshPhysicalMaterial({ color: 0x5c7488, metalness: 0, roughness: 0.08, transparent: true, opacity: 0.38, clearcoat: 1, clearcoatRoughness: 0.06 });
     function box(w, h, d, mat, x, y, z) {
       const m = new THREE.Mesh(roundedBox(w, h, d), mat);
       m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
@@ -543,6 +549,19 @@
     car.cruise = MAX_SPEED * (isTruck ? 0.26 + Math.random() * 0.14 : 0.32 + Math.random() * 0.22);
     car.rageMax = MAX_SPEED * (isTruck ? 0.42 + Math.random() * 0.12 : 0.6 + Math.random() * 0.18);
     car.model.userData.paint.color.setHex(TRAFFIC_HEX[(Math.random() * TRAFFIC_HEX.length) | 0]);
+  }
+  // Yeni araç ekle (seviye atlayınca mevcutları değiştirmeden, uzağa yerleştir)
+  function addTrafficCar() {
+    const hex = TRAFFIC_HEX[(Math.random() * TRAFFIC_HEX.length) | 0];
+    const r = Math.random();
+    const kind = r < 0.22 ? 'truck' : (r < 0.6 ? 'sedan' : 'car');
+    const m = kind === 'truck' ? buildTruck(hex) : (kind === 'sedan' ? buildSedan(hex) : buildCar(hex));
+    scene.add(m);
+    const isTruck = kind === 'truck';
+    const car = { model: m, lane: 0, z: -300, passed: false, kind, half: isTruck ? 3.4 : 2.15,
+      colLat: isTruck ? 1.95 : 1.7, cruise: 1, spd: 1, rageMax: 1, anger: 0 };
+    traffic.push(car);
+    recycleTraffic(car);   // boş şeride, uzağa yerleştir + hız/renk ata
   }
 
   // Ağaçlar (kaydırılan)
@@ -900,8 +919,11 @@
   function advanceLevel() {
     level++; speedBoost = Math.min(1.8, 1 + (level - 1) * 0.1); trafficDensity = Math.min(2, 1 + (level - 1) * 0.16);
     player.grip = Math.min(1, 0.35 + (level - 1) * 0.13);   // araba gelişir: yol tutuşu artar
+    // Mevcut trafiği DEĞİŞTİRME; sadece gerekirse uzağa yeni araç ekle (ani değişim yok)
+    const want = Math.round(7 * trafficDensity);
+    while (traffic.length < want) addTrafficCar();
     if (levelEl) levelEl.textContent = level; Audio.level();
-    pushPop('ARABA GELİŞTİ! · Yol tutuşu ↑'); spawnTraffic();
+    pushPop('ARABA GELİŞTİ! · Yol tutuşu ↑');
   }
 
   // ----------------------------- Çarpışma efekti -----------------------------
