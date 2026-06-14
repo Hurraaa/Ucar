@@ -994,6 +994,8 @@
     updateSea(dt); updateProvinceSign(dt, sp);
     PROPS.update(dt, sp);
     SIDEFX.update(dt, sp);
+    BRIDGE.update(dt, sp);
+    FORK.update(dt, sp);
   }
 
   // ----------------------------- Yan olaylar: arıza (dörtlü) & kavşak -----------------------------
@@ -1149,6 +1151,122 @@
       haz.visible = false; triGrp.visible = false; warn.visible = false; J.grp.visible = false;
       ht = 14 + Math.random() * 16; jt = 16 + Math.random() * 16;
     }
+    return { update, reset };
+  })();
+
+  // ----------------------------- Viyadük / üst geçit (altından geçilir) -----------------------------
+  function buildBridge() {
+    const grp = new THREE.Group();
+    const conc = new THREE.MeshStandardMaterial({ color: 0x9a9e9c, roughness: 0.92 });
+    const concD = new THREE.MeshStandardMaterial({ color: 0x7c807d, roughness: 0.95 });
+    const rail = new THREE.MeshStandardMaterial({ color: 0xc6cac8, roughness: 0.8 });
+    const DECK_Y = 7.0, HALF = 17;
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 1.1, 6), conc); deck.position.set(0, DECK_Y, 0); deck.castShadow = true; grp.add(deck);
+    const under = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.5, 5.2), concD); under.position.set(0, DECK_Y - 0.72, 0); grp.add(under);
+    for (const z of [-2.75, 2.75]) { const p = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.85, 0.4), rail); p.position.set(0, DECK_Y + 0.95, z); grp.add(p); }
+    for (const x of [-8.6, 8.6, -15, 15]) {
+      const pil = new THREE.Mesh(new THREE.BoxGeometry(1.6, DECK_Y - 0.45, 1.7), conc); pil.position.set(x, (DECK_Y - 0.45) / 2, 0); pil.castShadow = true; grp.add(pil);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.5, 2.6), concD); cap.position.set(x, DECK_Y - 0.75, 0); grp.add(cap);
+    }
+    const tops = [];
+    for (let i = 0; i < 2; i++) { const tc = buildCar([0x2b6cb0, 0xd83838][i]); tc.position.set(-12 + i * 18, DECK_Y + 0.55, 0); tc.rotation.y = i ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
+    grp.visible = false; scene.add(grp);
+    return { grp, tops };
+  }
+  const BRIDGE = (function () {
+    const B = buildBridge();
+    let bz = 0, bon = false, bt = 20 + Math.random() * 20;
+    function update(dt, sp) {
+      if (!bon) { bt -= dt; if (bt <= 0) { bon = true; bz = -320; bt = 30 + Math.random() * 28; } }
+      if (bon) {
+        bz += sp * dt; B.grp.visible = true;
+        B.grp.position.set(offX(bz), offY(bz), bz);
+        B.grp.rotation.y = -Math.atan2(offX(bz - 6) - offX(bz), 6);
+        for (let i = 0; i < B.tops.length; i++) { const tc = B.tops[i]; const d = i ? -1 : 1; tc.position.x += d * 8 * dt; if (tc.position.x > 17) tc.position.x = -17; else if (tc.position.x < -17) tc.position.x = 17; }
+        if (bz > 42) { bon = false; B.grp.visible = false; }
+      }
+    }
+    function reset() { bon = false; B.grp.visible = false; bt = 18 + Math.random() * 20; }
+    return { update, reset };
+  })();
+
+  // ----------------------------- Yol ayrımı / çıkış rampası (trafik ayrılır) -----------------------------
+  function makeExitSignTex(name) {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 160; const g = c.getContext('2d');
+    g.fillStyle = '#0a7a3a'; if (g.roundRect) { g.beginPath(); g.roundRect(4, 4, 312, 152, 14); g.fill(); } else g.fillRect(4, 4, 312, 152);
+    g.lineWidth = 6; g.strokeStyle = '#fff'; if (g.roundRect) { g.beginPath(); g.roundRect(12, 12, 296, 136, 10); g.stroke(); } else g.strokeRect(12, 12, 296, 136);
+    g.strokeStyle = '#fff'; g.lineWidth = 13; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(228, 130); g.lineTo(284, 64); g.stroke();
+    g.beginPath(); g.moveTo(252, 60); g.lineTo(290, 56); g.lineTo(286, 96); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'left'; g.font = 'bold 32px sans-serif'; g.fillText('ÇIKIŞ', 34, 72);
+    g.font = 'bold 26px sans-serif'; g.fillText(name, 34, 112);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  function buildFork() {
+    const grp = new THREE.Group();
+    const EDGE = ROAD_W / 2 + 0.9;
+    const asph = new THREE.MeshStandardMaterial({ color: 0x474b52, roughness: 0.96 });
+    const paint = new THREE.MeshStandardMaterial({ color: 0xeceeee, roughness: 0.7 });
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0xc2c6cc, roughness: 0.85 });
+    // rampa: sağ-ileri yöne uzanır
+    const rampGrp = new THREE.Group(); rampGrp.position.set(EDGE + 1.5, 0, 6); rampGrp.rotation.y = -0.34; grp.add(rampGrp);
+    const ramp = new THREE.Mesh(new THREE.PlaneGeometry(7, 50), asph); ramp.rotation.x = -Math.PI / 2; ramp.position.set(2.5, 0.016, -21); rampGrp.add(ramp);
+    for (const z of [-3.7, 3.7]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 48), curbMat); cb.position.set(2.5 + (z < 0 ? -3.5 : 3.5), 0.11, -21); rampGrp.add(cb); }
+    for (let i = 0; i < 9; i++) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 2.2), paint); d.rotation.x = -Math.PI / 2; d.position.set(2.5, 0.02, -3 - i * 4.6); rampGrp.add(d); }
+    // gore (ayrım burnu) — şerit ile rampa arasında V hatch
+    for (let i = 0; i < 4; i++) { const ch = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 2.4), paint); ch.rotation.x = -Math.PI / 2; ch.rotation.z = -0.5; ch.position.set(EDGE + 0.6 + i * 0.5, 0.02, 5 - i * 1.4); grp.add(ch); }
+    // ana yol sağ kenar (kesik) + ayrımdan önce sağ şeritte düz/çıkış oku yok; sadece kenar
+    for (let z = -8; z <= 9; z += 3) { const e = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 1.7), paint); e.rotation.x = -Math.PI / 2; e.position.set(EDGE - 0.15, 0.02, z); grp.add(e); }
+    // yeşil çıkış levhası (sağ, sürücüye bakar)
+    const exitMat = new THREE.MeshStandardMaterial({ map: makeExitSignTex('Çıkış'), transparent: true, roughness: 0.6 });
+    const exitPanel = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 1.85), exitMat); exitPanel.position.set(EDGE + 3.2, 3.4, -3); grp.add(exitPanel);
+    const exitPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.6, 6), curbMat); exitPost.position.set(EDGE + 3.2, 1.7, -3); grp.add(exitPost);
+    // ayrılan araç (sağ şeritten rampaya)
+    const diverger = buildCar(0xcfd6dd); attachBlinkers(diverger, 'car'); grp.add(diverger);
+    grp.visible = false; scene.add(grp);
+    return { grp, exitMat, diverger, EDGE };
+  }
+  const FORK = (function () {
+    const F = buildFork();
+    const ED = F.EDGE;
+    let fz = 0, fon = false, ft = 24 + Math.random() * 22, fblink = 0;
+    function update(dt, sp) {
+      if (!fon) {
+        ft -= dt;
+        if (ft <= 0) {
+          fon = true; fz = -340; fblink = 0;
+          if (F.exitMat.map) F.exitMat.map.dispose();
+          F.exitMat.map = makeExitSignTex(JTOWNS[(Math.random() * JTOWNS.length) | 0]); F.exitMat.needsUpdate = true;
+          ft = 26 + Math.random() * 26;
+        }
+      }
+      if (fon) {
+        fblink += dt; fz += sp * dt;
+        F.grp.visible = true;
+        F.grp.position.set(offX(fz), offY(fz), fz);
+        F.grp.rotation.y = -Math.atan2(offX(fz - 6) - offX(fz), 6);
+        // ayrılan araç: sağ şeritte sağ sinyal, ayrımda yumuşak yay ile rampaya kayar
+        const u = Math.max(0, Math.min(1, (fz + 70) / 95));
+        const R0 = laneX(2); let lx, lz, ry;
+        if (u < 0.4) { const a = u / 0.4; lx = R0; lz = 9 - a * 5; ry = 0; }
+        else if (u < 0.82) {
+          const a = (u - 0.4) / 0.42, mt = 1 - a;
+          const P0x = R0, P0z = 4, Cx = ED + 4, Cz = -2, P1x = ED + 12, P1z = -14;
+          lx = mt * mt * P0x + 2 * mt * a * Cx + a * a * P1x;
+          lz = mt * mt * P0z + 2 * mt * a * Cz + a * a * P1z;
+          const dx = 2 * mt * (Cx - P0x) + 2 * a * (P1x - Cx);
+          const dz = 2 * mt * (Cz - P0z) + 2 * a * (P1z - Cz);
+          ry = Math.atan2(dx, -dz);
+        } else { const a = (u - 0.82) / 0.18; lx = (ED + 12) + a * 8; lz = -14 - a * 14; ry = -0.34; }
+        F.diverger.visible = u < 0.99;
+        F.diverger.position.set(lx, 0, lz); F.diverger.rotation.y = ry;
+        const on = u < 0.85 && (fblink % 0.6) < 0.3;
+        F.diverger.userData.blinkR.emissiveIntensity = on ? 2.6 : 0;
+        F.diverger.userData.blinkL.emissiveIntensity = 0;
+        if (fz > 40) { fon = false; F.grp.visible = false; }
+      }
+    }
+    function reset() { fon = false; F.grp.visible = false; ft = 22 + Math.random() * 22; }
     return { update, reset };
   })();
 
@@ -1382,7 +1500,7 @@
     player.x = 0; player.vx = 0; player.lane = 1; player.speed = 0; player.steer = 0; player.grip = 0.35; player.highBeam = false;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
     player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
-    ENV.reset(); RADAR.reset(); PROPS.reset(); SIDEFX.reset();
+    ENV.reset(); RADAR.reset(); PROPS.reset(); SIDEFX.reset(); BRIDGE.reset(); FORK.reset();
     routeIdx = -1; curRegion = REGIONS.marmara;
     curveMul = curRegion.curve; hillMul = curRegion.hill;
     grassCol.set(curRegion.ground); targetGround.set(curRegion.ground);
