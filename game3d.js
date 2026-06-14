@@ -1279,6 +1279,23 @@
     g.font = 'bold 26px sans-serif'; g.fillText(name, 34, 112);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
   }
+  function makeChevronTex() {   // sarı zemin + siyah >>> oklar (viraj/ayrım uyarısı)
+    const c = document.createElement('canvas'); c.width = 192; c.height = 128; const g = c.getContext('2d');
+    g.fillStyle = '#f4c20d'; g.fillRect(0, 0, 192, 128);
+    g.strokeStyle = '#111'; g.lineWidth = 18; g.lineCap = 'round'; g.lineJoin = 'round';
+    for (const ox of [-44, 6, 56]) { g.beginPath(); g.moveTo(56 + ox, 30); g.lineTo(96 + ox, 64); g.lineTo(56 + ox, 98); g.stroke(); }
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  const chevronTex = makeChevronTex();
+  const yellowCurb = new THREE.MeshStandardMaterial({ color: 0xf2c20d, roughness: 0.8 });
+  const blackCurb = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.85 });
+  function stripedCurb(parent, x, z, len, rotY) {   // sarı-siyah bordür dizisi
+    const n = Math.round(len / 0.7);
+    for (let i = 0; i < n; i++) {
+      const cb = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.26, 0.7), i % 2 ? blackCurb : yellowCurb);
+      cb.position.set(x, 0.13, z - i * 0.7); cb.rotation.y = rotY || 0; parent.add(cb);
+    }
+  }
   function buildFork() {
     const grp = new THREE.Group();
     const EDGE = ROAD_W / 2 + 0.9;
@@ -1292,6 +1309,11 @@
     for (let i = 0; i < 9; i++) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 2.2), paint); d.rotation.x = -Math.PI / 2; d.position.set(2.5, 0.02, -3 - i * 4.6); rampGrp.add(d); }
     // gore (ayrım burnu) — şerit ile rampa arasında V hatch
     for (let i = 0; i < 4; i++) { const ch = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 2.4), paint); ch.rotation.x = -Math.PI / 2; ch.rotation.z = -0.5; ch.position.set(EDGE + 0.6 + i * 0.5, 0.02, 5 - i * 1.4); grp.add(ch); }
+    // sarı-siyah bordür (gore burnu boyunca) + chevron uyarı levhası
+    stripedCurb(grp, EDGE + 1.4, 3.5, 5.6, -0.34);
+    const chevA = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.3), new THREE.MeshStandardMaterial({ map: chevronTex, roughness: 0.6, side: THREE.DoubleSide }));
+    chevA.position.set(EDGE + 2.2, 1.5, 2.5); grp.add(chevA);
+    const chevPost = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.7, 6), curbMat); chevPost.position.set(EDGE + 2.2, 0.7, 2.5); grp.add(chevPost);
     // ana yol sağ kenar (kesik) + ayrımdan önce sağ şeritte düz/çıkış oku yok; sadece kenar
     for (let z = -8; z <= 9; z += 3) { const e = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 1.7), paint); e.rotation.x = -Math.PI / 2; e.position.set(EDGE - 0.15, 0.02, z); grp.add(e); }
     // yeşil çıkış levhası (sağ, sürücüye bakar)
