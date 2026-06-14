@@ -202,9 +202,10 @@
 
   // ---- Viraj & yokuş eğrileri: mesafeye göre yatay (offX) / dikey (offY) ofset ----
   // Oyuncu hep dünya merkezinde; yol etrafında kıvrılıp alçalır/yükselir.
-  const CURVE_AMP = 21, HILL_AMP = 10;
-  function curveX(s) { return CURVE_AMP * (Math.sin(s * 0.0021) + 0.45 * Math.sin(s * 0.00105 + 1.3)); }
-  function hillY(s) { return HILL_AMP * (Math.sin(s * 0.0016) + 0.55 * Math.sin(s * 0.00072 + 0.7)); }
+  // Kısa dalga boyu = hız 95'te birkaç saniyede bir belirgin viraj/tepe (hissedilir eğim).
+  const CURVE_AMP = 16, HILL_AMP = 8;
+  function curveX(s) { return CURVE_AMP * (Math.sin(s * 0.0042) + 0.4 * Math.sin(s * 0.0091 + 1.3)); }
+  function hillY(s) { return HILL_AMP * (Math.sin(s * 0.0072) + 0.4 * Math.sin(s * 0.015 + 0.7)); }
   function offX(z) { return curveX(dist - z) - curveX(dist); }
   function offY(z) { return hillY(dist - z) - hillY(dist); }
 
@@ -1362,8 +1363,8 @@
     camera.position.x += ((player.x * 0.5 + offX(9) * 0.85) - camera.position.x) * Math.min(1, dt * 6);
     camera.position.y += ((4.3 + offY(9) * 1.25) - camera.position.y) * 0.12;
     camera.position.z = 9;
-    camera.lookAt(player.x * 0.3 + offX(-20) * 1.1, 1.5 + offY(-20) * 1.3, -20);
-    camera.rotation.z += ((-player.steer * 0.04 - curveAng * 1.7) - camera.rotation.z) * 0.12;
+    camera.lookAt(player.x * 0.3 + offX(-20) * 1.1, 1.5 + offY(-20) * 1.1, -20);
+    camera.rotation.z += ((-player.steer * 0.04 - curveAng * 1.1) - camera.rotation.z) * 0.12;
     sun.target.position.set(player.x, 0, -6); sun.position.set(player.x - 26, 40, 18);
 
     // motor sesi
