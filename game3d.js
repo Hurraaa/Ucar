@@ -785,7 +785,9 @@
 
   // ----------------------------- Girişler -----------------------------
   const keys = { left: false, right: false, gas: false, brake: false };
+  const typing = (e) => { const t = e.target; return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable); };
   window.addEventListener('keydown', (e) => {
+    if (typing(e)) return;          // plaka kutusuna yazarken oyun kontrolleri devre dışı
     switch (e.key) {
       case 'ArrowLeft': case 'a': case 'A': keys.left = true; e.preventDefault(); break;
       case 'ArrowRight': case 'd': case 'D': keys.right = true; e.preventDefault(); break;
@@ -798,6 +800,7 @@
     }
   });
   window.addEventListener('keyup', (e) => {
+    if (typing(e)) return;
     switch (e.key) {
       case 'ArrowLeft': case 'a': case 'A': keys.left = false; break;
       case 'ArrowRight': case 'd': case 'D': keys.right = false; break;
