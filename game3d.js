@@ -611,6 +611,22 @@
   const traffic = [];
   const CAR_LEN = 4.3;
   const MIN_GAP = CAR_LEN + 1.6;   // aynı şeritte iki araç arası min. mesafe
+  // Tır şerit tercihi: çoğunlukla en sağ (LANES-1), bazen orta, en sol şeride çok çok nadir
+  function truckLane() { const r = Math.random(); return r < 0.02 ? 0 : (r < 0.34 ? 1 : LANES - 1); }
+  // Dönüş sinyali ışıkları (ön+arka köşeler, sol/sağ ayrı malzeme)
+  const BLINK_GEO = new THREE.BoxGeometry(0.17, 0.15, 0.17);
+  function attachBlinkers(model, kind) {
+    const mk = () => new THREE.MeshStandardMaterial({ color: 0x4a2f00, emissive: 0xff9500, emissiveIntensity: 0, roughness: 0.4 });
+    const matL = mk(), matR = mk();
+    const W = kind === 'truck' ? 1.32 : 0.98;
+    const rz = kind === 'truck' ? 3.3 : (kind === 'sedan' ? 2.35 : 2.05);
+    const fz = kind === 'truck' ? -2.4 : (kind === 'sedan' ? -2.3 : -2.0);
+    const y = kind === 'truck' ? 0.95 : 0.62;
+    for (const [x, z, mat] of [[-W, fz, matL], [-W, rz, matL], [W, fz, matR], [W, rz, matR]]) {
+      const mesh = new THREE.Mesh(BLINK_GEO, mat); mesh.position.set(x, y, z); model.add(mesh);
+    }
+    model.userData.blinkL = matL; model.userData.blinkR = matR;
+  }
   function spawnTraffic() {
     for (const t of traffic) scene.remove(t.model);
     traffic.length = 0;
@@ -621,14 +637,15 @@
       const r = Math.random();
       const kind = r < 0.22 ? 'truck' : (r < 0.6 ? 'sedan' : 'car');
       const m = kind === 'truck' ? buildTruck(hex) : (kind === 'sedan' ? buildSedan(hex) : buildCar(hex));
-      scene.add(m);
-      const lane = i % LANES;                       // şeritlere sırayla dağıt
-      const z = laneNext[lane] - Math.random() * 30;
+      scene.add(m); attachBlinkers(m, kind);
       const isTruck = kind === 'truck';
+      const lane = isTruck ? truckLane() : (i % LANES);  // tır: sağ/orta ağırlıklı
+      const z = laneNext[lane] - Math.random() * 30;
       const half = isTruck ? 3.4 : 2.15;            // araç yarı-uzunluğu
       laneNext[lane] = z - (half + 36 + Math.random() * 50);
       const car = { model: m, lane, laneF: lane, z, passed: false, kind, half, colLat: isTruck ? 1.95 : 1.7,
-        boost: 0, laneCool: 1 + Math.random() * 3, canLC: !isTruck,
+        boost: 0, laneCool: 1 + Math.random() * 3, canLC: true,
+        laneMin: isTruck ? 1 : 0, homeLane: isTruck ? LANES - 1 : -1, blinker: 0, useBlinker: Math.random() < 0.6,
         cruise: MAX_SPEED * (isTruck ? 0.26 + Math.random() * 0.14 : 0.32 + Math.random() * 0.22), spd: 0,
         rageMax: MAX_SPEED * (isTruck ? 0.42 + Math.random() * 0.12 : 0.6 + Math.random() * 0.18), anger: 0 };
       car.spd = car.cruise;
@@ -638,12 +655,13 @@
   }
   // Geçilen aracı ileri (uzağa) taşı: yeni şeritteki en öndeki aracın da ilerisine koy
   function recycleTraffic(car) {
-    car.lane = (Math.random() * LANES) | 0;
+    car.lane = car.kind === 'truck' ? truckLane() : ((Math.random() * LANES) | 0);
     let frontMost = -180;
     for (const o of traffic) if (o !== car && o.lane === car.lane) frontMost = Math.min(frontMost, o.z);
     car.z = frontMost - (car.half + 32 + Math.random() * 100);
     car.anger = 0; car.spd = car.cruise; car.passed = false;
     car.laneF = car.lane; car.boost = 0; car.laneCool = 1 + Math.random() * 3;
+    car.blinker = 0; car.useBlinker = Math.random() < 0.6;
     const isTruck = car.kind === 'truck';
     car.cruise = MAX_SPEED * (isTruck ? 0.26 + Math.random() * 0.14 : 0.32 + Math.random() * 0.22);
     car.rageMax = MAX_SPEED * (isTruck ? 0.42 + Math.random() * 0.12 : 0.6 + Math.random() * 0.18);
@@ -655,10 +673,12 @@
     const r = Math.random();
     const kind = r < 0.22 ? 'truck' : (r < 0.6 ? 'sedan' : 'car');
     const m = kind === 'truck' ? buildTruck(hex) : (kind === 'sedan' ? buildSedan(hex) : buildCar(hex));
-    scene.add(m);
+    scene.add(m); attachBlinkers(m, kind);
     const isTruck = kind === 'truck';
     const car = { model: m, lane: 0, laneF: 0, z: -300, passed: false, kind, half: isTruck ? 3.4 : 2.15,
-      colLat: isTruck ? 1.95 : 1.7, boost: 0, laneCool: 1 + Math.random() * 3, canLC: !isTruck, cruise: 1, spd: 1, rageMax: 1, anger: 0 };
+      colLat: isTruck ? 1.95 : 1.7, boost: 0, laneCool: 1 + Math.random() * 3, canLC: true,
+      laneMin: isTruck ? 1 : 0, homeLane: isTruck ? LANES - 1 : -1, blinker: 0, useBlinker: Math.random() < 0.6,
+      cruise: 1, spd: 1, rageMax: 1, anger: 0 };
     traffic.push(car);
     recycleTraffic(car);   // boş şeride, uzağa yerleştir + hız/renk ata
   }
@@ -1246,9 +1266,13 @@
         const d = car.z - o.z;                       // o öndeyse d>0
         if (d > 0 && d < car.half + o.half + 11 && o.spd < car.spd - 1.5) { blocked = true; break; }
       }
-      if (!blocked) continue;
-      for (const cand of (Math.random() < 0.5 ? [car.lane - 1, car.lane + 1] : [car.lane + 1, car.lane - 1])) {
-        if (cand < 0 || cand >= LANES) continue;
+      let cands;
+      if (blocked) cands = [car.lane - 1, car.lane + 1];           // sollama: önce sol şerit
+      else if (car.homeLane >= 0 && car.lane !== car.homeLane)     // tır: yol açıksa sağ şeride dön
+        cands = [car.lane + Math.sign(car.homeLane - car.lane)];
+      else continue;
+      for (const cand of cands) {
+        if (cand < car.laneMin || cand >= LANES) continue;          // tır en sol şeride girmez
         let clear = true;
         for (const o of traffic) {
           if (o === car) continue;
@@ -1257,7 +1281,11 @@
           }
         }
         if (clear && cand === plLane && Math.abs(car.z) < car.half + 7) clear = false;  // oyuncuya geçme
-        if (clear) { car.lane = cand; car.laneCool = 2.5 + Math.random() * 2; car.boost = 2.8; break; }
+        if (clear) {
+          if (car.useBlinker) car.blinker = Math.sign(cand - car.lane) || 1;            // sinyal veren araçlar
+          car.lane = cand; car.laneCool = 2.5 + Math.random() * 2; if (blocked) car.boost = 2.8;
+          break;
+        }
       }
     }
     // trafik — 2) araç-takip: aynı şeritte görünür boşluk bırak (dip dibe gitmesinler)
@@ -1280,6 +1308,13 @@
       const cx = laneX(car.laneF);
       car.model.position.set(cx + offX(car.z), offY(car.z), car.z);
       car.model.rotation.y = -Math.atan2(offX(car.z - 4) - offX(car.z), 4) - (car.lane - car.laneF) * 0.35;  // viraj + şerit yönü
+      // dönüş sinyali: geçiş bitince kapan; sinyal verenlerde köşe ışıkları yanıp söner
+      if (car.blinker && Math.abs(car.lane - car.laneF) < 0.05) car.blinker = 0;
+      if (car.model.userData.blinkL) {
+        const on = (performance.now() % 640) < 320;
+        car.model.userData.blinkL.emissiveIntensity = (car.blinker < 0 && on) ? 2.2 : 0;
+        car.model.userData.blinkR.emissiveIntensity = (car.blinker > 0 && on) ? 2.2 : 0;
+      }
       const roll = (sp - car.spd) * dt / 0.46;
       for (const wgrp of car.model.userData.wheels) wgrp.children[0].rotation.x += roll;
       const lat = Math.abs(cx - player.x);
