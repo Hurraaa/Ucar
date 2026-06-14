@@ -540,8 +540,52 @@
   const TRAFFIC_HEX = [0xd65a31, 0x3066be, 0x4caf50, 0x9b5de5, 0xf9c74f, 0x577590, 0xbcc0c4, 0x2b2d34];
 
   const MAX_SPEED = 95;          // birim/sn (~ görsel hız)
-  const player = { x: 0, vx: 0, lane: 1, speed: 0, chosen: 0, steer: 0, grip: 0.35, highBeam: false, model: null, modelType: 0 };
+  const player = { x: 0, vx: 0, lane: 1, speed: 0, chosen: 0, steer: 0, grip: 0.35, highBeam: false, model: null, modelType: 0, countryIdx: 0, plateText: '34 UCAR' };
   const BUILDERS = [buildCar, buildSedan];
+
+  // ----------------------------- Plaka (ülke + bayrak) -----------------------------
+  const PLATE_COUNTRIES = [
+    { code: 'TR', name: 'Türkiye', emoji: '🇹🇷', bg: '#f3f4f6', fg: '#111' },
+    { code: 'DE', name: 'Almanya', emoji: '🇩🇪', bg: '#f3f4f6', fg: '#111' },
+    { code: 'FR', name: 'Fransa', emoji: '🇫🇷', bg: '#f3f4f6', fg: '#111' },
+    { code: 'IT', name: 'İtalya', emoji: '🇮🇹', bg: '#f3f4f6', fg: '#111' },
+    { code: 'GB', name: 'İngiltere', emoji: '🇬🇧', bg: '#f4d11a', fg: '#111' },
+    { code: 'ES', name: 'İspanya', emoji: '🇪🇸', bg: '#f3f4f6', fg: '#111' },
+    { code: 'US', name: 'ABD', emoji: '🇺🇸', bg: '#eef2f7', fg: '#16306b' }
+  ];
+  function drawFlag(g, code, x, y, w, h) {
+    g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+    if (code === 'TR') { g.fillStyle = '#e30a17'; g.fillRect(x, y, w, h); g.fillStyle = '#fff'; g.beginPath(); g.arc(x + w * 0.42, y + h / 2, h * 0.3, 0, 7); g.fill(); g.fillStyle = '#e30a17'; g.beginPath(); g.arc(x + w * 0.48, y + h / 2, h * 0.24, 0, 7); g.fill(); g.fillStyle = '#fff'; g.beginPath(); g.arc(x + w * 0.62, y + h / 2, h * 0.12, 0, 7); g.fill(); }
+    else if (code === 'DE') { const b = h / 3; g.fillStyle = '#000'; g.fillRect(x, y, w, b); g.fillStyle = '#d00'; g.fillRect(x, y + b, w, b); g.fillStyle = '#fc0'; g.fillRect(x, y + 2 * b, w, b); }
+    else if (code === 'FR') { const s = w / 3; g.fillStyle = '#0050a4'; g.fillRect(x, y, s, h); g.fillStyle = '#fff'; g.fillRect(x + s, y, s, h); g.fillStyle = '#ef4135'; g.fillRect(x + 2 * s, y, s, h); }
+    else if (code === 'IT') { const s = w / 3; g.fillStyle = '#008c45'; g.fillRect(x, y, s, h); g.fillStyle = '#fff'; g.fillRect(x + s, y, s, h); g.fillStyle = '#cd212a'; g.fillRect(x + 2 * s, y, s, h); }
+    else if (code === 'ES') { g.fillStyle = '#aa151b'; g.fillRect(x, y, w, h); g.fillStyle = '#f1bf00'; g.fillRect(x, y + h * 0.25, w, h * 0.5); }
+    else if (code === 'GB') { g.fillStyle = '#012169'; g.fillRect(x, y, w, h); g.strokeStyle = '#fff'; g.lineWidth = h * 0.28; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y + h); g.moveTo(x + w, y); g.lineTo(x, y + h); g.stroke(); g.strokeStyle = '#c8102e'; g.lineWidth = h * 0.16; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y + h); g.moveTo(x + w, y); g.lineTo(x, y + h); g.stroke(); g.strokeStyle = '#fff'; g.lineWidth = h * 0.34; g.beginPath(); g.moveTo(x + w / 2, y); g.lineTo(x + w / 2, y + h); g.moveTo(x, y + h / 2); g.lineTo(x + w, y + h / 2); g.stroke(); g.strokeStyle = '#c8102e'; g.lineWidth = h * 0.2; g.beginPath(); g.moveTo(x + w / 2, y); g.lineTo(x + w / 2, y + h); g.moveTo(x, y + h / 2); g.lineTo(x + w, y + h / 2); g.stroke(); }
+    else { g.fillStyle = '#3c3b6e'; g.fillRect(x, y, w, h); for (let i = 0; i < 7; i++) { g.fillStyle = i % 2 ? '#fff' : '#b22234'; g.fillRect(x, y + i * h / 7, w, h / 7); } g.fillStyle = '#3c3b6e'; g.fillRect(x, y, w * 0.42, h * 0.55); }
+    g.restore();
+  }
+  function makePlateTexture(country, text) {
+    const W = 512, H = 116, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d');
+    g.fillStyle = country.bg; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#111'; g.lineWidth = 7; g.strokeRect(4, 4, W - 8, H - 8);
+    const bw = 86;                                   // sol mavi bant
+    g.fillStyle = '#0b3aa0'; g.fillRect(8, 8, bw, H - 16);
+    drawFlag(g, country.code, 22, 16, bw - 28, 40);
+    g.fillStyle = '#fff'; g.font = 'bold 30px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(country.code, 8 + bw / 2, H - 28);
+    g.fillStyle = country.fg; g.textBaseline = 'middle';
+    const area = W - bw - 44; let fs = 74;
+    do { g.font = '900 ' + fs + 'px Arial, sans-serif'; fs -= 3; } while (g.measureText(text || '').width > area && fs > 22);
+    g.fillText(text || '', 8 + bw + (W - 16 - bw) / 2, H / 2 + 3);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8; return tex;
+  }
+  const plateMat = new THREE.MeshStandardMaterial({ roughness: 0.5, metalness: 0 });
+  function applyPlate() {
+    const tex = makePlateTexture(PLATE_COUNTRIES[player.countryIdx], player.plateText);
+    if (plateMat.map) plateMat.map.dispose();
+    plateMat.map = tex; plateMat.needsUpdate = true;
+  }
 
   let score = 0, best = Number(localStorage.getItem('ucar3d_best') || 0);
   let level = 1, dist = 0, speedBoost = 1, trafficDensity = 1;
@@ -553,9 +597,15 @@
     if (player.model) scene.remove(player.model);
     player.model = BUILDERS[player.modelType](CAR_COLORS[player.chosen].hex);
     player.model.position.x = oldX;
+    // plakayı arkaya tak
+    const pz = player.modelType === 1 ? 2.42 : 2.17;
+    const py = player.modelType === 1 ? 0.62 : 0.56;
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 0.21), plateMat);
+    plate.position.set(0, py, pz); player.model.add(plate);
     scene.add(player.model);
   }
   rebuildPlayer();
+  applyPlate();
 
   // Trafik havuzu
   const traffic = [];
@@ -577,7 +627,8 @@
       const isTruck = kind === 'truck';
       const half = isTruck ? 3.4 : 2.15;            // araç yarı-uzunluğu
       laneNext[lane] = z - (half + 36 + Math.random() * 50);
-      const car = { model: m, lane, z, passed: false, kind, half, colLat: isTruck ? 1.95 : 1.7,
+      const car = { model: m, lane, laneF: lane, z, passed: false, kind, half, colLat: isTruck ? 1.95 : 1.7,
+        boost: 0, laneCool: 1 + Math.random() * 3, canLC: !isTruck,
         cruise: MAX_SPEED * (isTruck ? 0.26 + Math.random() * 0.14 : 0.32 + Math.random() * 0.22), spd: 0,
         rageMax: MAX_SPEED * (isTruck ? 0.42 + Math.random() * 0.12 : 0.6 + Math.random() * 0.18), anger: 0 };
       car.spd = car.cruise;
@@ -592,6 +643,7 @@
     for (const o of traffic) if (o !== car && o.lane === car.lane) frontMost = Math.min(frontMost, o.z);
     car.z = frontMost - (car.half + 32 + Math.random() * 100);
     car.anger = 0; car.spd = car.cruise; car.passed = false;
+    car.laneF = car.lane; car.boost = 0; car.laneCool = 1 + Math.random() * 3;
     const isTruck = car.kind === 'truck';
     car.cruise = MAX_SPEED * (isTruck ? 0.26 + Math.random() * 0.14 : 0.32 + Math.random() * 0.22);
     car.rageMax = MAX_SPEED * (isTruck ? 0.42 + Math.random() * 0.12 : 0.6 + Math.random() * 0.18);
@@ -605,8 +657,8 @@
     const m = kind === 'truck' ? buildTruck(hex) : (kind === 'sedan' ? buildSedan(hex) : buildCar(hex));
     scene.add(m);
     const isTruck = kind === 'truck';
-    const car = { model: m, lane: 0, z: -300, passed: false, kind, half: isTruck ? 3.4 : 2.15,
-      colLat: isTruck ? 1.95 : 1.7, cruise: 1, spd: 1, rageMax: 1, anger: 0 };
+    const car = { model: m, lane: 0, laneF: 0, z: -300, passed: false, kind, half: isTruck ? 3.4 : 2.15,
+      colLat: isTruck ? 1.95 : 1.7, boost: 0, laneCool: 1 + Math.random() * 3, canLC: !isTruck, cruise: 1, spd: 1, rageMax: 1, anger: 0 };
     traffic.push(car);
     recycleTraffic(car);   // boş şeride, uzağa yerleştir + hız/renk ata
   }
@@ -914,6 +966,31 @@
     });
   });
 
+  // Ülke seçimi
+  const countriesEl = document.getElementById('countries');
+  if (countriesEl) PLATE_COUNTRIES.forEach((co, i) => {
+    const b = document.createElement('button');
+    b.className = 'country-btn' + (i === 0 ? ' selected' : '');
+    b.innerHTML = '<span class="flag">' + co.emoji + '</span>' + co.code;
+    b.addEventListener('click', () => {
+      player.countryIdx = i;
+      document.querySelectorAll('.country-btn').forEach((el, j) => el.classList.toggle('selected', j === i));
+      applyPlate(); Audio.init(); Audio.ui();
+    });
+    countriesEl.appendChild(b);
+  });
+  // Plaka metni (normal plaka uzunluğu: harf/rakam/boşluk, en çok 9)
+  const plateInput = document.getElementById('plate-input');
+  if (plateInput) {
+    plateInput.value = player.plateText;
+    plateInput.addEventListener('input', () => {
+      let v = plateInput.value.toUpperCase().replace(/[^A-Z0-9 ]/g, '').slice(0, 9);
+      plateInput.value = v;
+      player.plateText = v.trim() || ' ';
+      applyPlate();
+    });
+  }
+
   const pops = [];
   function pushPop(text) { pops.push({ text, t: 0 }); refreshPops(); }
   let popEl = null;
@@ -1145,12 +1222,40 @@
     // trafik — 1) hareket
     for (const car of traffic) {
       if (car.anger > 0) car.anger -= dt;
-      const target = car.anger > 0 ? car.rageMax : car.cruise;
-      const rate = (car.anger > 0 ? 0.9 : 0.4) * MAX_SPEED;
+      if (car.boost > 0) car.boost -= dt;
+      const fast = car.anger > 0 || car.boost > 0;
+      const target = fast ? car.rageMax : car.cruise;
+      const rate = (fast ? 0.9 : 0.4) * MAX_SPEED;
       car.spd += Math.sign(target - car.spd) * Math.min(Math.abs(target - car.spd), rate * dt);
       car.z += (sp - car.spd) * dt;
       if (car.z > 24) recycleTraffic(car);     // geçildi -> ileri taşı
       if (car.z < -400) car.z = -220;
+    }
+    // trafik — 1b) ŞERİT DEĞİŞTİRME + SOLLAMA: öndeki yavaşsa boş şeride geçip hızlan
+    const plLane = Math.round(player.x / LANE_W + (LANES - 1) / 2);
+    for (const car of traffic) {
+      if (car.laneCool > 0) car.laneCool -= dt;
+      if (!car.canLC || car.laneCool > 0 || Math.abs(car.laneF - car.lane) > 0.08) continue;
+      // öndeki yavaş araç var mı?
+      let blocked = false;
+      for (const o of traffic) {
+        if (o === car || o.lane !== car.lane) continue;
+        const d = car.z - o.z;                       // o öndeyse d>0
+        if (d > 0 && d < car.half + o.half + 11 && o.spd < car.spd - 1.5) { blocked = true; break; }
+      }
+      if (!blocked) continue;
+      for (const cand of (Math.random() < 0.5 ? [car.lane - 1, car.lane + 1] : [car.lane + 1, car.lane - 1])) {
+        if (cand < 0 || cand >= LANES) continue;
+        let clear = true;
+        for (const o of traffic) {
+          if (o === car) continue;
+          if (o.lane === cand || Math.round(o.laneF) === cand) {
+            if (Math.abs(o.z - car.z) < car.half + o.half + 7) { clear = false; break; }
+          }
+        }
+        if (clear && cand === plLane && Math.abs(car.z) < car.half + 7) clear = false;  // oyuncuya geçme
+        if (clear) { car.lane = cand; car.laneCool = 2.5 + Math.random() * 2; car.boost = 2.8; break; }
+      }
     }
     // trafik — 2) araç-takip: aynı şeritte görünür boşluk bırak (dip dibe gitmesinler)
     for (let ln = 0; ln < LANES; ln++) {
@@ -1168,11 +1273,13 @@
     }
     // trafik — 3) modeli yerleştir, teker, çarpışma
     for (const car of traffic) {
-      car.model.position.set(laneX(car.lane) + offX(car.z), offY(car.z), car.z);
-      car.model.rotation.y = -Math.atan2(offX(car.z - 4) - offX(car.z), 4);  // viraja göre yönelim
+      car.laneF += (car.lane - car.laneF) * Math.min(1, dt * 2.6);   // yumuşak şerit geçişi
+      const cx = laneX(car.laneF);
+      car.model.position.set(cx + offX(car.z), offY(car.z), car.z);
+      car.model.rotation.y = -Math.atan2(offX(car.z - 4) - offX(car.z), 4) - (car.lane - car.laneF) * 0.35;  // viraj + şerit yönü
       const roll = (sp - car.spd) * dt / 0.46;
       for (const wgrp of car.model.userData.wheels) wgrp.children[0].rotation.x += roll;
-      const lat = Math.abs(laneX(car.lane) - player.x);
+      const lat = Math.abs(cx - player.x);
       if (Math.abs(car.z) < car.half + 1.45 && lat < car.colLat && sp > MAX_SPEED * 0.1) { doCrash(); break; }
       // Yakın geçiş bonusu: aracı geçip arkanda bırakınca, yakınsa ödül (combo'lu)
       if (!car.passed && car.z > 0.6 && sp > car.spd + 4) {

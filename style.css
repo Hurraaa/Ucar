@@ -111,6 +111,29 @@ html, body {
 .pause-btn svg { width: 22px; height: 22px; fill: currentColor; }
 .pause-btn.hidden { display: none; }
 
+/* Ülke seçimi + plaka kutusu */
+.countries { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 10px; }
+.country-btn {
+  padding: 6px 9px; border-radius: 9px; cursor: pointer;
+  background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.14);
+  color: #cdd6e4; font-weight: 700; font-size: 13px; line-height: 1;
+  display: flex; align-items: center; gap: 4px; transition: all .15s ease;
+}
+.country-btn .flag { font-size: 17px; }
+.country-btn.selected {
+  border-color: #ffcf4d; color: #fff;
+  background: linear-gradient(180deg, rgba(255,207,77,0.22), rgba(255,207,77,0.08));
+}
+.plate-input {
+  width: 80%; max-width: 280px; margin: 0 auto 14px; display: block;
+  padding: 10px 12px; border-radius: 10px;
+  background: #f3f4f6; color: #111;
+  border: 3px solid #0b3aa0;
+  font-weight: 900; font-size: 20px; letter-spacing: 2px; text-align: center;
+  text-transform: uppercase; font-family: Arial, sans-serif;
+}
+.plate-input:focus { outline: none; border-color: #ffcf4d; }
+
 /* Model seçici butonları */
 .models { display: flex; gap: 10px; justify-content: center; margin-bottom: 14px; }
 .model-btn {
