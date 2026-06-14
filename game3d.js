@@ -1022,20 +1022,66 @@
     panel.position.y = 3.3; group.add(panel);
     group.visible = false; scene.add(group); return group;
   }
+  const JTOWNS = ['Gölköy', 'Yeşilyurt', 'Çamlıca', 'Akpınar', 'Karaören', 'Pınarbaşı', 'Söğütlü', 'Ovacık', 'Kızılca', 'Bağlıca', 'Dereköy', 'Taşpınar'];
+  function makeBlueSignTex(name) {
+    const c = document.createElement('canvas'); c.width = 320; c.height = 150; const g = c.getContext('2d');
+    g.fillStyle = '#0b56b0'; if (g.roundRect) { g.beginPath(); g.roundRect(4, 4, 312, 142, 14); g.fill(); } else g.fillRect(4, 4, 312, 142);
+    g.lineWidth = 6; g.strokeStyle = '#fff'; if (g.roundRect) { g.beginPath(); g.roundRect(12, 12, 296, 126, 10); g.stroke(); } else g.strokeRect(12, 12, 296, 126);
+    g.lineWidth = 13; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(74, 120); g.lineTo(74, 70); g.lineTo(44, 70); g.stroke();
+    g.beginPath(); g.moveTo(56, 50); g.lineTo(28, 70); g.lineTo(56, 90); g.stroke();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.font = 'bold 38px sans-serif'; g.fillText(name, 200, 90);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  function makeGiveWayTex() {   // ters üçgen "YOL VER"
+    const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d'); g.clearRect(0, 0, 256, 256);
+    g.beginPath(); g.moveTo(18, 44); g.lineTo(238, 44); g.lineTo(128, 234); g.closePath(); g.fillStyle = '#d11'; g.fill();
+    g.beginPath(); g.moveTo(60, 68); g.lineTo(196, 68); g.lineTo(128, 192); g.closePath(); g.fillStyle = '#fff'; g.fill();
+    g.fillStyle = '#111'; g.textAlign = 'center'; g.font = 'bold 33px sans-serif'; g.fillText('YOL', 128, 108); g.fillText('VER', 128, 144);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+  }
+  // Bağlantılı T-kavşak: yan yol + ağız + bordür + çizgiler + DUR çizgisi + sol dönüş oku + mavi yön levhası + YOL VER + bekleyen araç + dönen araç
+  function buildJunction() {
+    const grp = new THREE.Group();
+    const EDGE = ROAD_W / 2 + 0.9;
+    const asph = new THREE.MeshStandardMaterial({ color: 0x474b52, roughness: 0.96 });
+    const paint = new THREE.MeshStandardMaterial({ color: 0xeceeee, roughness: 0.7 });
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0xc2c6cc, roughness: 0.85 });
+    function flat(w, d, mat, x, z, y) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); grp.add(m); return m; }
+    flat(36, 7.2, asph, -EDGE - 18, 0, 0.016);                 // yan yol gövdesi
+    flat(8, 13, asph, -EDGE - 3, 0, 0.014);                    // ağız (ana yola bağlanır)
+    for (const z of [-3.95, 3.95]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(34, 0.22, 0.34), curbMat); cb.position.set(-EDGE - 18, 0.11, z); grp.add(cb); }   // bordürler
+    for (let x = -EDGE - 7; x > -EDGE - 33; x -= 4.2) flat(2.1, 0.34, paint, x, 0, 0.02);   // yan yol orta çizgileri
+    flat(0.72, 7.0, paint, -EDGE - 0.7, 0, 0.022);             // DUR/stop çizgisi (ağızda)
+    for (let z = -7.5; z <= 7.5; z += 3) flat(0.18, 1.7, paint, -EDGE + 0.15, z, 0.02);     // ana yol sol kenar (kesik)
+    const arr = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 3.4), new THREE.MeshStandardMaterial({ map: makeLeftArrowTex(), transparent: true, roughness: 0.7 }));
+    arr.rotation.x = -Math.PI / 2; arr.position.set(laneX(0), 0.024, 5.6); grp.add(arr);    // sol dönüş oku
+    // mavi yön levhası (sağ omuz, sürücüye bakar)
+    const blueMat = new THREE.MeshStandardMaterial({ map: makeBlueSignTex('Yeşilyurt'), transparent: true, roughness: 0.55 });
+    const bluePanel = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.6), blueMat); bluePanel.position.set(EDGE + 2.7, 3.0, -5); grp.add(bluePanel);
+    const bluePost = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 3.2, 6), curbMat); bluePost.position.set(EDGE + 2.7, 1.5, -5); grp.add(bluePost);
+    // YOL VER (yan yol ağzında, yan yoldaki araca bakar)
+    const yv = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), new THREE.MeshStandardMaterial({ map: makeGiveWayTex(), transparent: true, roughness: 0.6 }));
+    yv.position.set(-EDGE - 1.6, 2.4, 4.7); yv.rotation.y = -Math.PI / 2; grp.add(yv);
+    const yvPost = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.5, 6), curbMat); yvPost.position.set(-EDGE - 1.6, 1.25, 4.7); grp.add(yvPost);
+    // bekleyen araç (ana yola katılmak için DUR çizgisinde, fren ışıkları)
+    const wait = buildCar(0x3a6ea5); wait.position.set(-EDGE - 4, 0, 3.0); wait.rotation.y = Math.PI / 2; grp.add(wait);
+    // dönen araç (ana yoldan yan yola)
+    const turner = buildCar(0xdedede); attachBlinkers(turner, 'car'); grp.add(turner);
+    grp.visible = false; scene.add(grp);
+    return { grp, blueMat, wait, turner, EDGE };
+  }
   const SIDEFX = (function () {
     // --- Arızalı/duran araç (sağ banket) + uyarı üçgeni, dörtlüler yanar ---
     const haz = buildCar(0xb43c3c); attachBlinkers(haz, 'car'); haz.visible = false; scene.add(haz);
     const triHaz = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), new THREE.MeshStandardMaterial({ map: makeTriSignTex(), transparent: true, side: THREE.DoubleSide }));
     triHaz.position.y = 0.5; const triGrp = new THREE.Group(); triGrp.add(triHaz); triGrp.visible = false; scene.add(triGrp);
     let hz = 0, hon = false, ht = 14 + Math.random() * 16, hblink = 0;
-    // --- Kavşak (sol): uyarı levhası + yan yol + sola dönüş oku + dönen araç ---
+    // --- Kavşak (sol): bağlantılı T-kavşak + levhalar + bekleyen/dönen araç ---
     const warn = signOnPost(makeTriSignTex(), 1.7, 1.7);
-    const sideRoad = new THREE.Mesh(new THREE.PlaneGeometry(30, 9), new THREE.MeshStandardMaterial({ color: 0x4c5057, roughness: 0.95 }));
-    sideRoad.rotation.x = -Math.PI / 2; sideRoad.visible = false; scene.add(sideRoad);
-    const arrow = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 3.2), new THREE.MeshBasicMaterial({ map: makeLeftArrowTex(), transparent: true }));
-    arrow.rotation.x = -Math.PI / 2; arrow.visible = false; scene.add(arrow);
-    const turner = buildCar(0xeeeeee); attachBlinkers(turner, 'car'); turner.visible = false; scene.add(turner);
-    let jz = 0, jon = false, jt = 18 + Math.random() * 18, jblink = 0, tprog = 0;
+    const J = buildJunction();
+    const ED = -J.EDGE;
+    let jz = 0, jon = false, jt = 16 + Math.random() * 16, jblink = 0;
     function update(dt, sp) {
       // ---- arıza ----
       hblink += dt;
@@ -1052,31 +1098,56 @@
         if (hz > 26) { hon = false; haz.visible = false; triGrp.visible = false; }
       }
       // ---- kavşak ----
-      if (!jon) { jt -= dt; if (jt <= 0) { jon = true; jz = -330; tprog = 0; jt = 22 + Math.random() * 26; } }
+      if (!jon) {
+        jt -= dt;
+        if (jt <= 0) {
+          jon = true; jz = -340; jblink = 0;
+          if (J.blueMat.map) J.blueMat.map.dispose();
+          J.blueMat.map = makeBlueSignTex(JTOWNS[(Math.random() * JTOWNS.length) | 0]); J.blueMat.needsUpdate = true;
+          jt = 22 + Math.random() * 24;
+        }
+      }
       if (jon) {
-        jblink += dt; jz += sp * dt; junctionActive = true; junctionZ = jz;
-        const wz = jz - 130;                              // uyarı levhası kavşaktan önce gelir
-        warn.visible = wz < 20 && wz > -340;
+        jblink += dt; jz += sp * dt;
+        junctionActive = jz > -95 && jz < 28; junctionZ = jz;   // bu civarda sol şerit dikkatli
+        // tüm kavşak yol hizasında ve eğimde
+        J.grp.visible = true;
+        J.grp.position.set(offX(jz), offY(jz), jz);
+        J.grp.rotation.y = -Math.atan2(offX(jz - 6) - offX(jz), 6);
+        // uyarı üçgeni kavşaktan önce gelir
+        const wz = jz - 120;
+        warn.visible = wz < 22 && wz > -360;
         warn.position.set((ROAD_W / 2 + 4.2) + offX(wz), offY(wz), wz);
-        sideRoad.visible = true; sideRoad.position.set(-(ROAD_W / 2 + 15) + offX(jz), -0.02 + offY(jz), jz);
-        arrow.visible = true; arrow.position.set(laneX(0) + offX(jz), 0.05 + offY(jz), jz);
-        // sola dönen araç: sol sinyalini yakar, kavşağa gelince sola kıvrılıp ayrılır
-        const tz = jz - 4;
-        if (jz > -40) tprog = Math.min(1, tprog + dt * 0.7);
-        turner.visible = tprog < 0.96;
-        const tx = laneX(0) - tprog * 9;
-        turner.position.set(tx + offX(tz), offY(tz), tz);
-        turner.rotation.y = -Math.atan2(offX(tz - 4) - offX(tz), 4) + tprog * 0.95;
-        const ton = (jblink % 0.64) < 0.32;
-        turner.userData.blinkL.emissiveIntensity = ton ? 2.6 : 0;
-        turner.userData.blinkR.emissiveIntensity = 0;
-        if (jz > 30) { jon = false; junctionActive = false; junctionZ = 999; warn.visible = false; sideRoad.visible = false; arrow.visible = false; turner.visible = false; }
+        warn.rotation.y = -Math.atan2(offX(wz - 6) - offX(wz), 6);
+        // bekleyen araç: fren ışıkları yanık, ana yola katılmak için hafif kıpırdar
+        J.wait.userData.tailMat.emissiveIntensity = 2.0;
+        J.wait.position.x = ED - 4 + Math.max(0, Math.sin(jblink * 0.8)) * 0.55;
+        // dönen araç: yumuşak yay ile sola döner (yaklaşırken fren+sol sinyal, sonra yan yolda uzaklaşır)
+        const u = Math.max(0, Math.min(1, (jz + 70) / 92));
+        const L0 = laneX(0); let lx, lz, ry, brake;
+        if (u < 0.45) { const a = u / 0.45; lx = L0; lz = 8 - a * 6.4; ry = 0; brake = true; }
+        else if (u < 0.8) {
+          const a = (u - 0.45) / 0.35, mt = 1 - a;
+          const P0x = L0, P0z = 1.6, Cx = L0, Cz = -2.2, P1x = ED - 6, P1z = 0;
+          lx = mt * mt * P0x + 2 * mt * a * Cx + a * a * P1x;
+          lz = mt * mt * P0z + 2 * mt * a * Cz + a * a * P1z;
+          const dx = 2 * mt * (Cx - P0x) + 2 * a * (P1x - Cx);
+          const dz = 2 * mt * (Cz - P0z) + 2 * a * (P1z - Cz);
+          ry = Math.atan2(dx, -dz); brake = true;
+        } else { const a = (u - 0.8) / 0.2; lx = (ED - 6) - a * 26; lz = 0; ry = -Math.PI / 2; brake = false; }
+        J.turner.visible = u < 0.98;
+        J.turner.position.set(lx, 0, lz); J.turner.rotation.y = ry;
+        J.turner.userData.tailMat.emissiveIntensity = brake ? 2.2 : 0.6;
+        const ton = u < 0.86 && (jblink % 0.6) < 0.3;
+        J.turner.userData.blinkL.emissiveIntensity = ton ? 2.6 : 0;
+        J.turner.userData.blinkR.emissiveIntensity = 0;
+        if (jz > 36) { jon = false; junctionActive = false; junctionZ = 999; J.grp.visible = false; warn.visible = false; }
       }
     }
     function reset() {
       hon = false; jon = false; junctionActive = false; junctionZ = 999;
-      haz.visible = false; triGrp.visible = false; warn.visible = false; sideRoad.visible = false; arrow.visible = false; turner.visible = false;
-      ht = 14 + Math.random() * 16; jt = 18 + Math.random() * 18;
+      haz.visible = false; triGrp.visible = false; warn.visible = false; J.grp.visible = false;
+      ht = 14 + Math.random() * 16; jt = 16 + Math.random() * 16;
     }
     return { update, reset };
   })();
