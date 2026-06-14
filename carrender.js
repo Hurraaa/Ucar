@@ -105,22 +105,22 @@
     const brake = !!opts.brake;
     const w = width, half = w / 2;
 
-    // ---- Dikey seviyeler (baseY = zemin) ----
-    const yGlassTop = baseY - w * 0.635;
-    const yRoof     = baseY - w * 0.615;
-    const yGlassBot = baseY - w * 0.445;
-    const yShoulder = baseY - w * 0.405;   // en geniş bel hattı (haunch)
-    const yTailTop  = baseY - w * 0.335;
-    const yTailBot  = baseY - w * 0.245;
-    const yBumper   = baseY - w * 0.215;
-    const ySill     = baseY - w * 0.115;
+    // ---- Dikey seviyeler (baseY = zemin) — alçak, geniş, agresif spor duruş ----
+    const yGlassTop = baseY - w * 0.560;
+    const yRoof     = baseY - w * 0.540;
+    const yGlassBot = baseY - w * 0.400;
+    const yShoulder = baseY - w * 0.360;   // en geniş bel hattı (haunch)
+    const yTailTop  = baseY - w * 0.300;   // ince LED şerit
+    const yTailBot  = baseY - w * 0.252;
+    const yBumper   = baseY - w * 0.235;
+    const ySill     = baseY - w * 0.120;
 
     // ---- Yarı genişlikler ----
     const wShoulder = half * 1.00;
-    const wDeck     = half * 0.965;
-    const wSill     = half * 0.90;
-    const wGlassBot = half * 0.70;
-    const wRoof     = half * 0.52;
+    const wDeck     = half * 0.97;
+    const wSill     = half * 0.94;
+    const wGlassBot = half * 0.64;
+    const wRoof     = half * 0.42;   // dar/keskin tavan (coupe)
 
     // ---- 1) Zemin gölgesi ----
     const sh = ctx.createRadialGradient(cx, baseY + w * 0.01, w * 0.06, cx, baseY + w * 0.01, w * 0.62);
@@ -253,19 +253,58 @@
     ctx.fillStyle = 'rgba(0,0,0,0.30)';
     ctx.fillRect(cx - spW / 2, spy + w * 0.006, spW, w * 0.007);
 
-    // ---- 7) Stop lambaları (sarmalayan LED bar) ----
+    // ---- 7) Keskin tam-genişlik LED stop şeridi (modern spor) ----
     const tH = yTailBot - yTailTop;
-    drawTail(ctx, cx - wShoulder * 0.96, yTailTop, wShoulder * 0.5, tH, brake, body);
-    drawTail(ctx, cx + wShoulder * 0.46, yTailTop, wShoulder * 0.5, tH, brake, body);
-    // orta bağlantı şeridi
-    if (brake) { ctx.save(); ctx.shadowColor = '#ff2a24'; ctx.shadowBlur = w * 0.05; }
-    const cb = ctx.createLinearGradient(0, yTailTop, 0, yTailBot);
-    cb.addColorStop(0, brake ? '#ff7a6e' : '#5e1212');
-    cb.addColorStop(0.5, brake ? '#ff5046' : '#7c1818');
-    cb.addColorStop(1, brake ? '#cc2a22' : '#4a0e0e');
-    ctx.fillStyle = cb;
-    rr(ctx, cx - wShoulder * 0.46, yTailTop + tH * 0.30, wShoulder * 0.92, tH * 0.40, tH * 0.18); ctx.fill();
+    const stripW = wShoulder * 1.88;   // neredeyse tam genişlik
+    // Keskin uçlu housing (paralelkenar köşeli)
+    function stripPath(inset, h0) {
+      const x0 = cx - stripW / 2 + inset, x1 = cx + stripW / 2 - inset;
+      const yt = yTailTop + h0, yb = yTailBot - h0;
+      const ch = (yb - yt) * 0.5; // köşe keskinliği (yatay chamfer)
+      ctx.beginPath();
+      ctx.moveTo(x0 + ch, yt);
+      ctx.lineTo(x1 - ch, yt);
+      ctx.lineTo(x1, yt + (yb - yt) * 0.5);
+      ctx.lineTo(x1 - ch, yb);
+      ctx.lineTo(x0 + ch, yb);
+      ctx.lineTo(x0, yt + (yb - yt) * 0.5);
+      ctx.closePath();
+    }
+    // gömük koyu housing
+    ctx.fillStyle = '#120708';
+    stripPath(0, -tH * 0.12); ctx.fill();
+    // kırmızı lens
+    if (brake) { ctx.save(); ctx.shadowColor = '#ff2a24'; ctx.shadowBlur = w * 0.07; }
+    const lg = ctx.createLinearGradient(0, yTailTop, 0, yTailBot);
+    lg.addColorStop(0, brake ? '#ff8475' : '#b62420');
+    lg.addColorStop(0.45, brake ? '#ff4a3c' : '#8c1a17');
+    lg.addColorStop(1, brake ? '#cf2a22' : '#5c100e');
+    ctx.fillStyle = lg;
+    stripPath(tH * 0.12, tH * 0.04); ctx.fill();
     if (brake) ctx.restore();
+    // ince parlak LED iç çizgi (tam boy)
+    ctx.fillStyle = brake ? 'rgba(255,235,228,0.95)' : 'rgba(255,150,140,0.55)';
+    rr(ctx, cx - stripW / 2 + tH * 0.55, yTailTop + tH * 0.40, stripW - tH * 1.1, tH * 0.16, tH * 0.08); ctx.fill();
+    // marka/orta ayraç (siyah)
+    ctx.fillStyle = '#120708';
+    ctx.fillRect(cx - stripW * 0.02, yTailTop - tH * 0.05, stripW * 0.04, tH * 1.1);
+
+    // ---- 7b) Keskin karakter çizgisi (stoplardan omuza doğru) ----
+    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    ctx.lineWidth = Math.max(0.8, w * 0.006);
+    ctx.beginPath();
+    ctx.moveTo(cx - wShoulder * 0.98, yTailTop - tH * 0.4);
+    ctx.lineTo(cx - wShoulder * 0.5, yShoulder + w * 0.02);
+    ctx.moveTo(cx + wShoulder * 0.98, yTailTop - tH * 0.4);
+    ctx.lineTo(cx + wShoulder * 0.5, yShoulder + w * 0.02);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.beginPath();
+    ctx.moveTo(cx - wShoulder * 0.98, yTailTop - tH * 0.4 - w * 0.006);
+    ctx.lineTo(cx - wShoulder * 0.5, yShoulder + w * 0.014);
+    ctx.moveTo(cx + wShoulder * 0.98, yTailTop - tH * 0.4 - w * 0.006);
+    ctx.lineTo(cx + wShoulder * 0.5, yShoulder + w * 0.014);
+    ctx.stroke();
 
     // ---- 8) Tampon + difüzör + egzoz ----
     ctx.save();
