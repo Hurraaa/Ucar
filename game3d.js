@@ -59,6 +59,8 @@
   // ----------------------------- Işık -----------------------------
   const hemi = new THREE.HemisphereLight(0xbfe0f5, 0x3a6b39, 0.95);
   scene.add(hemi);
+  const ambient = new THREE.AmbientLight(0xffffff, 0.12);   // taban: hiçbir şey saf siyah olmasın
+  scene.add(ambient);
   const sun = new THREE.DirectionalLight(0xfff1d8, 1.7);
   sun.position.set(-26, 40, 18);
   sun.castShadow = true;
@@ -87,14 +89,14 @@
 
   const ENV = (function () {
     const KEYS = [
-      { h: 0,  top: '#070b1a', bot: '#0d1430', sun: '#3a4a7a', sunI: 0.04, hemiI: 0.16, hs: '#10182f', hg: '#0a0f08', fog: '#0d1430', night: 1 },
-      { h: 5,  top: '#13204a', bot: '#33507e', sun: '#6a6a9a', sunI: 0.20, hemiI: 0.32, hs: '#2a3552', hg: '#16180f', fog: '#33507e', night: 0.82 },
-      { h: 7,  top: '#3a5a9e', bot: '#f0b888', sun: '#ffd0a0', sunI: 1.00, hemiI: 0.70, hs: '#a8bcdc', hg: '#3a4a30', fog: '#f0c098', night: 0.2 },
+      { h: 0,  top: '#0c1430', bot: '#16204a', sun: '#4a5a9a', sunI: 0.06, hemiI: 0.40, hs: '#2a3760', hg: '#171c2c', fog: '#16204a', night: 1 },
+      { h: 5,  top: '#16285a', bot: '#3a5a8e', sun: '#7a7aaa', sunI: 0.25, hemiI: 0.50, hs: '#3a4a70', hg: '#1c1f18', fog: '#3a5a8e', night: 0.82 },
+      { h: 7,  top: '#3a5a9e', bot: '#f0b888', sun: '#ffd0a0', sunI: 1.00, hemiI: 0.75, hs: '#a8bcdc', hg: '#3a4a30', fog: '#f0c098', night: 0.2 },
       { h: 12, top: '#1e4f9e', bot: '#bfe0f5', sun: '#fff1d8', sunI: 1.70, hemiI: 0.95, hs: '#bfe0f5', hg: '#3a6b39', fog: '#bfe0f5', night: 0 },
       { h: 17, top: '#235a9e', bot: '#cfe2ec', sun: '#ffe6c0', sunI: 1.40, hemiI: 0.85, hs: '#cfe2ec', hg: '#3a6b39', fog: '#cfe2ec', night: 0 },
-      { h: 19, top: '#2a3f8e', bot: '#f0a060', sun: '#ff8a40', sunI: 0.90, hemiI: 0.60, hs: '#caa0a0', hg: '#34402c', fog: '#e88a60', night: 0.3 },
-      { h: 21, top: '#101a3a', bot: '#2a2444', sun: '#5a4a8a', sunI: 0.18, hemiI: 0.30, hs: '#241f3a', hg: '#0f0f10', fog: '#241f3a', night: 0.85 },
-      { h: 24, top: '#070b1a', bot: '#0d1430', sun: '#3a4a7a', sunI: 0.04, hemiI: 0.16, hs: '#10182f', hg: '#0a0f08', fog: '#0d1430', night: 1 }
+      { h: 19, top: '#2a3f8e', bot: '#f0a060', sun: '#ff8a40', sunI: 0.90, hemiI: 0.62, hs: '#caa0a0', hg: '#34402c', fog: '#e88a60', night: 0.3 },
+      { h: 21, top: '#142150', bot: '#33274e', sun: '#7a5aaa', sunI: 0.22, hemiI: 0.48, hs: '#352d52', hg: '#16161a', fog: '#33274e', night: 0.85 },
+      { h: 24, top: '#0c1430', bot: '#16204a', sun: '#4a5a9a', sunI: 0.06, hemiI: 0.40, hs: '#2a3760', hg: '#171c2c', fog: '#16204a', night: 1 }
     ];
     const top = new THREE.Color(), bot = new THREE.Color(), sunC = new THREE.Color(), hsC = new THREE.Color(), hgC = new THREE.Color(), fogC = new THREE.Color();
     const A = new THREE.Color();
@@ -137,9 +139,11 @@
       rainGeo.attributes.position.needsUpdate = true;
     }
 
-    // Gece farı
-    const headlight = new THREE.SpotLight(0xfff0d0, 0, 80, Math.PI / 5, 0.5, 1.2);
+    // Gece farı + arabayı görünür kılan yumuşak dolgu ışığı
+    const headlight = new THREE.SpotLight(0xfff0d0, 0, 90, Math.PI / 4.2, 0.45, 1.1);
     scene.add(headlight); scene.add(headlight.target);
+    const rearFill = new THREE.PointLight(0xbcd0ff, 0, 26, 1.4);   // kameranın yanında, arabanın arkasını aydınlatır
+    scene.add(rearFill);
 
     function update(dt) {
       tod = (tod + dt * 24 / DAY_LEN) % 24;
@@ -165,9 +169,14 @@
       scene.fog.far = 430 - cur.night * 120 - wet * 150;
 
       const dark = Math.max(cur.night, wet * 0.4);
-      headlight.intensity = dark * 5.5;
-      headlight.position.set(px, 1.4, -1);
-      headlight.target.position.set(px, 0.2, -24);
+      const beam = player.highBeam;                  // uzun far basılı mı
+      ambient.intensity = 0.12 + dark * 0.22;        // gece tabanı yükselir (araba görünür)
+      headlight.intensity = dark * (beam ? 22 : 12) + (beam ? 2.5 : 0);  // uzun farda daha parlak
+      headlight.angle = beam ? Math.PI / 5.2 : Math.PI / 4.2;            // uzun far daha odaklı
+      headlight.position.set(px, 1.5, -1.6);
+      headlight.target.position.set(px, beam ? 0.5 : 0.2, beam ? -55 : -26);  // uzun far daha uzağa
+      rearFill.intensity = dark * 6;
+      rearFill.position.set(px, 5, camera.position.z - 1);
 
       if (typeof roadRibbon !== 'undefined' && roadRibbon) {
         roadRibbon.material.color.setScalar(1 - wet * 0.32);
@@ -430,13 +439,11 @@
   const TRAFFIC_HEX = [0xd65a31, 0x3066be, 0x4caf50, 0x9b5de5, 0xf9c74f, 0x577590, 0xbcc0c4, 0x2b2d34];
 
   const MAX_SPEED = 95;          // birim/sn (~ görsel hız)
-  const player = { x: 0, lane: 1, speed: 0, chosen: 0, steer: 0, model: null, modelType: 0 };
+  const player = { x: 0, vx: 0, lane: 1, speed: 0, chosen: 0, steer: 0, grip: 0.35, highBeam: false, model: null, modelType: 0 };
   const BUILDERS = [buildCar, buildSedan];
 
   let score = 0, best = Number(localStorage.getItem('ucar3d_best') || 0);
   let level = 1, dist = 0, speedBoost = 1, trafficDensity = 1;
-  let flashTimer = 0, flashCooldown = 0;
-  const sun_dummy = 0;
 
   // Oyuncu arabası (model değiştirilebilir)
   function rebuildPlayer() {
@@ -523,9 +530,9 @@
       case 'ArrowUp': case 'w': case 'W': keys.gas = true; e.preventDefault(); break;
       case 'ArrowDown': case 's': case 'S': keys.brake = true; e.preventDefault(); break;
       case 'p': case 'P': case 'Escape': togglePause(); break;
-      case 'f': case 'F': doFlash(); e.preventDefault(); break;
+      case 'f': case 'F': setHighBeam(true); e.preventDefault(); break;
       case 'h': case 'H': if (state === State.PLAY) Audio.horn(); break;
-      case ' ': if (state === State.MENU || state === State.OVER) startGame(); else doFlash(); e.preventDefault(); break;
+      case ' ': if (state === State.MENU || state === State.OVER) startGame(); else setHighBeam(true); e.preventDefault(); break;
     }
   });
   window.addEventListener('keyup', (e) => {
@@ -534,6 +541,7 @@
       case 'ArrowRight': case 'd': case 'D': keys.right = false; break;
       case 'ArrowUp': case 'w': case 'W': keys.gas = false; break;
       case 'ArrowDown': case 's': case 'S': keys.brake = false; break;
+      case 'f': case 'F': case ' ': setHighBeam(false); break;
     }
   });
 
@@ -574,10 +582,11 @@
 
   const flashBtn = document.getElementById('flash-btn');
   if (flashBtn) {
-    const press = (e) => { e.preventDefault(); Audio.init(); flashBtn.classList.add('pressed'); doFlash(); };
-    const rel = () => flashBtn.classList.remove('pressed');
+    const press = (e) => { e.preventDefault(); Audio.init(); flashBtn.classList.add('pressed'); setHighBeam(true); };
+    const rel = () => { flashBtn.classList.remove('pressed'); setHighBeam(false); };
     flashBtn.addEventListener('touchstart', press, { passive: false });
     flashBtn.addEventListener('touchend', (e) => { e.preventDefault(); rel(); }, { passive: false });
+    flashBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); rel(); }, { passive: false });
     flashBtn.addEventListener('mousedown', press);
     window.addEventListener('mouseup', rel);
   }
@@ -587,16 +596,20 @@
   flashLight.position.set(0, 1.2, -3);
   scene.add(flashLight);
 
-  function doFlash() {
-    if (state !== State.PLAY || flashCooldown > 0) return;
-    flashTimer = 0.4; flashCooldown = 0.45;
-    Audio.flash();
+  // Öndeki trafiği sinirlendir (selektör)
+  function angerAhead() {
     let any = 0;
     for (const car of traffic) {
-      const dz = car.z; // oyuncu z=0, önümüzdekiler dz<0
-      if (dz < 0 && dz > -130 && Math.abs(laneX(car.lane) - player.x) < LANE_W * 1.6) { car.anger = 7; any++; }
+      if (car.z < 0 && car.z > -130 && Math.abs(laneX(car.lane) - player.x) < LANE_W * 1.6) { car.anger = 7; any++; }
     }
-    if (any) { pushPop('SELEKTÖR!'); Audio.horn(); }   // sinirlenen trafik korna çalar
+    return any;
+  }
+  // Selektör basılı tutuldukça uzun far açık kalır; bırakınca normale döner
+  function setHighBeam(on) {
+    if (state !== State.PLAY) { player.highBeam = false; return; }
+    if (on === player.highBeam) return;
+    player.highBeam = on;
+    if (on) { Audio.flash(); if (angerAhead()) { pushPop('SELEKTÖR!'); Audio.horn(); } }
   }
 
   // ----------------------------- Ses -----------------------------
@@ -696,7 +709,7 @@
 
   function startGame() {
     level = 1; dist = 0; speedBoost = 1; trafficDensity = 1; score = 0;
-    player.x = 0; player.lane = 1; player.speed = 0; player.steer = 0;
+    player.x = 0; player.vx = 0; player.lane = 1; player.speed = 0; player.steer = 0; player.grip = 0.35; player.highBeam = false;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
     player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
     ENV.reset();
@@ -731,7 +744,9 @@
   }
   function advanceLevel() {
     level++; speedBoost = Math.min(1.8, 1 + (level - 1) * 0.1); trafficDensity = Math.min(2, 1 + (level - 1) * 0.16);
-    if (levelEl) levelEl.textContent = level; Audio.level(); spawnTraffic();
+    player.grip = Math.min(1, 0.35 + (level - 1) * 0.13);   // araba gelişir: yol tutuşu artar
+    if (levelEl) levelEl.textContent = level; Audio.level();
+    pushPop('ARABA GELİŞTİ! · Yol tutuşu ↑'); spawnTraffic();
   }
 
   // ----------------------------- Çarpışma efekti -----------------------------
@@ -750,23 +765,25 @@
     document.getElementById('game-shell').appendChild(flashDiv);
   }
 
-  function explode(px) {
+  function explode(px, f) {           // f = darbe şiddeti 0..~1.5
     const colorHex = CAR_COLORS[player.chosen].hex;
-    for (let i = 0; i < 34; i++) {
+    const nDeb = Math.round(6 + f * 30);
+    for (let i = 0; i < nDeb; i++) {
       const kind = i % 3;  // 0: kıvılcım, 1: gövde parçası, 2: koyu parça
       let mat, geo;
       if (kind === 0) { mat = new THREE.MeshStandardMaterial({ color: 0xffc24a, emissive: 0xff7a10, emissiveIntensity: 2.4 }); geo = debrisGeo; }
       else { mat = new THREE.MeshStandardMaterial({ color: kind === 1 ? colorHex : 0x23262c, metalness: 0.55, roughness: 0.5 }); geo = i % 2 ? shardGeo : debrisGeo; }
       const m = new THREE.Mesh(geo, mat);
       m.scale.setScalar(kind === 0 ? 0.35 + Math.random() * 0.3 : 0.5 + Math.random() * 0.9);
-      m.position.set(px + (Math.random() - 0.5) * 1.4, 1.0 + Math.random() * 0.7, 0.4 + (Math.random() - 0.5) * 1.2);
+      m.position.set(px + (Math.random() - 0.5) * 1.4, 0.9 + Math.random() * 0.6, 0.4 + (Math.random() - 0.5) * 1.2);
       m.castShadow = kind !== 0;
       scene.add(m);
-      const ang = Math.random() * Math.PI * 2, spd = 4 + Math.random() * 11;
-      debris.push({ m, vx: Math.cos(ang) * spd * 0.55, vy: 5 + Math.random() * 10, vz: Math.sin(ang) * spd * 0.4 + 2.5,
+      const ang = Math.random() * Math.PI * 2, spd = (2 + Math.random() * 9) * (0.4 + f);
+      debris.push({ m, vx: Math.cos(ang) * spd * 0.55, vy: (2 + Math.random() * 8) * (0.4 + f), vz: Math.sin(ang) * spd * 0.4 + 1.5 * f,
         rx: (Math.random() - 0.5) * 14, ry: (Math.random() - 0.5) * 14, rz: (Math.random() - 0.5) * 14, life: 0, max: 1.1 + Math.random() * 0.7 });
     }
-    for (let i = 0; i < 7; i++) {
+    const nSmoke = Math.round(2 + f * 6);
+    for (let i = 0; i < nSmoke; i++) {
       const mat = new THREE.MeshStandardMaterial({ color: 0x4a4d52, transparent: true, opacity: 0.72 });
       const m = new THREE.Mesh(smokeGeo, mat);
       m.position.set(px + (Math.random() - 0.5) * 1.6, 1 + Math.random() * 0.6, 0.4 + (Math.random() - 0.5) * 1.4);
@@ -778,12 +795,15 @@
   function doCrash() {
     if (state === State.CRASH || state === State.OVER) return;
     state = State.CRASH;
-    crash.timer = 1.4; crash.shake = 1.0; crash.ended = false;
+    const f = Math.min(1.5, player.speed / MAX_SPEED);   // darbe şiddeti
+    crash.timer = 1.0 + f * 0.6; crash.shake = 0.3 + f * 0.9; crash.ended = false;
     crash.worldSpd = player.speed;
-    crash.vy = 7 + player.speed / MAX_SPEED * 5;          // araba havalanır
-    crash.rx = (Math.random() - 0.5) * 6; crash.rz = (Math.random() - 0.5) * 7;
-    explode(player.x);
-    Audio.stopEngine(); Audio.crash(); Audio.horn();
+    crash.vy = 1.2 + f * 9;                               // yavaşta küçük sıçrama, hızlıda havalanır
+    crash.rx = (Math.random() - 0.5) * f * 7;             // yavaşta neredeyse hiç dönmez (yere girmez)
+    crash.rz = (Math.random() - 0.5) * f * 8;
+    player.highBeam = false;
+    explode(player.x, f);
+    Audio.stopEngine(); Audio.crash(); if (f > 0.35) Audio.horn();
     if (flashDiv) { flashDiv.style.transition = 'none'; flashDiv.style.opacity = '0.9'; requestAnimationFrame(() => { flashDiv.style.transition = 'opacity .5s ease-out'; flashDiv.style.opacity = '0'; }); }
     if (touchControls) touchControls.classList.remove('active');
     if (pauseBtn) pauseBtn.classList.add('hidden');
@@ -845,24 +865,31 @@
   // ----------------------------- Güncelleme -----------------------------
   function update(dt) {
     const effMax = MAX_SPEED * speedBoost;
-    if (flashTimer > 0) flashTimer -= dt;
-    if (flashCooldown > 0) flashCooldown -= dt;
+    if (player.highBeam) angerAhead();   // basılı tutuldukça öndeki trafik tedirgin
 
     if (keys.gas) player.speed += effMax / 4 * dt;
     else if (keys.brake) player.speed -= effMax / 1.4 * dt;
     else player.speed -= effMax / 6 * dt;
     player.speed = Math.max(0, Math.min(player.speed, effMax));
 
-    // şerit/yatay
-    const steerSpeed = LANE_W * 1.4 * dt * (0.6 + 0.6 * player.speed / effMax);
-    if (keys.left) player.x -= steerSpeed;
-    if (keys.right) player.x += steerSpeed;
+    // ---- Yatay hareket: yol tutuşlu/savrulmalı model ----
+    // Yüksek hızda tutuş düşer; düşük grip => geç tepki + kayma (momentum kalır)
+    const spd01 = player.speed / effMax;
+    const gripEff = player.grip * (1 - spd01 * 0.45);            // hızda tutuş azalır
+    const steerInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    const maxVx = LANE_W * 2.3;
+    const want = steerInput * maxVx;
+    const resp = 1.2 + gripEff * 7;                             // tepkisellik (grip arttıkça keskin)
+    player.vx += (want - player.vx) * Math.min(1, dt * resp);
+    // yüksek hız + düşük tutuşta hafif balıkkuyruğu (savrulma)
+    if (player.speed > effMax * 0.55) player.vx += Math.sin(dist * 0.6) * (1 - gripEff) * spd01 * 5 * dt;
+    player.x += player.vx * dt;
     const lim = ROAD_W / 2 - 0.9;
-    player.x = Math.max(-lim - 1.4, Math.min(lim + 1.4, player.x));
-    // yol dışı yavaşlama
+    if (player.x < -lim - 1.4) { player.x = -lim - 1.4; player.vx *= -0.3; }
+    if (player.x > lim + 1.4) { player.x = lim + 1.4; player.vx *= -0.3; }
+    // yol dışı (banket) yavaşlama
     if (Math.abs(player.x) > lim) player.speed -= effMax / 1.6 * dt * 0.6;
 
-    const steerInput = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
     player.steer += (steerInput - player.steer) * Math.min(1, dt * 9);
 
     const sp = player.speed;
@@ -924,9 +951,10 @@
     // oyuncu model güncelle
     const bank = Math.atan2(offX(-8), 8);      // viraj eğimi
     const pitch = Math.atan2(offY(-5), 5);     // yokuş eğimi
+    const drift = Math.max(-1, Math.min(1, player.vx / (LANE_W * 2.3)));   // kayma açısı
     player.model.position.x = player.x;
-    player.model.rotation.y = -player.steer * 0.12 - bank * 0.5;
-    player.model.rotation.z = -player.steer * 0.05 - bank * 0.3;
+    player.model.rotation.y = -player.steer * 0.10 - bank * 0.5 - drift * 0.32;  // burun kaymaya döner
+    player.model.rotation.z = -player.steer * 0.05 - bank * 0.3 + drift * 0.05;
     player.model.rotation.x = -pitch * 0.8;
     const wr = sp * dt / 0.46;
     for (const wgrp of player.model.userData.wheels) wgrp.children[0].rotation.x -= wr;
@@ -936,9 +964,9 @@
     // fren stop parlaması
     player.model.userData.tailMat.emissiveIntensity = keys.brake ? 2.2 : 0.6;
 
-    // selektör ışığı
+    // selektör ışığı (basılı tutuldukça açık)
     flashLight.position.x = player.x;
-    flashLight.intensity = flashTimer > 0 ? (3.5 * (flashTimer / 0.4)) * (0.6 + 0.4 * Math.sin(performance.now() * 0.08)) : 0;
+    flashLight.intensity = player.highBeam ? 4.5 : 0;
 
     // kamera takip (viraj ve yokuşa göre yönelir)
     camera.position.x += ((player.x * 0.5 + offX(9) * 0.6) - camera.position.x) * Math.min(1, dt * 6);
