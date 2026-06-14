@@ -1083,15 +1083,17 @@
       if (car.z > 24) recycleTraffic(car);     // geçildi -> ileri taşı
       if (car.z < -400) car.z = -220;
     }
-    // trafik — 2) araç-takip: aynı şeritte min. mesafeyi koru (içiçe geçmeyi önler)
+    // trafik — 2) araç-takip: aynı şeritte görünür boşluk bırak (dip dibe gitmesinler)
     for (let ln = 0; ln < LANES; ln++) {
       const arr = traffic.filter((c) => c.lane === ln).sort((a, b) => a.z - b.z); // önden (en -z) arkaya
       for (let i = 1; i < arr.length; i++) {
         const front = arr[i - 1], back = arr[i];
-        const minZ = front.z + front.half + back.half + 1.4;   // araç boyutlarına göre
-        if (back.z < minZ) {                    // çok yaklaştı -> geri it ve öne uydur
-          back.z = minZ;
-          if (back.spd > front.spd) back.spd = front.spd;
+        const gap = front.half + back.half + 3.2;       // bagaj-bagaj görünür boşluk
+        const minZ = front.z + gap;
+        if (back.z < minZ) {                             // sert sınır: içiçe/dip dibe olmaz
+          back.z = minZ; back.spd = Math.min(back.spd, front.spd * 0.96);
+        } else if (back.z < minZ + 8 && back.spd > front.spd) {
+          back.spd = front.spd;                          // erkenden yavaşla, öne ramlamaz
         }
       }
     }
