@@ -1227,31 +1227,31 @@
     const concD = new THREE.MeshStandardMaterial({ color: 0x8e918d, roughness: 0.95 });
     const rail = new THREE.MeshStandardMaterial({ color: 0xd2d5d2, roughness: 0.8 });
     const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe9b0, emissive: 0xffd98a, emissiveIntensity: 1.6, roughness: 0.5 });
-    const DECK_Y = 6.7, HALF = 18;
-    // tabliye + alt kiriş (kalın, dolu görünüm)
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 1.2, 6.4), conc); deck.position.set(0, DECK_Y, 0); deck.castShadow = true; grp.add(deck);
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.7, 5.4), concD); beam.position.set(0, DECK_Y - 0.85, 0); grp.add(beam);
-    for (const z of [-3.0, 3.0]) { const p = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.8, 0.4), rail); p.position.set(0, DECK_Y + 0.95, z); grp.add(p); }
-    // ayaklar (kalın) + temel + başlık
-    for (const x of [-8.4, 8.4, -14, 14]) {
+    // Bölünmüş yolun TAMAMINI aşar: sağ banketten karşı yolun ötesine
+    const DECK_Y = 6.8, CX = -6, HALF = 23, L = CX - HALF, R = CX + HALF;   // L=-29, R=+17
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 1.25, 7), conc); deck.position.set(CX, DECK_Y, 0); deck.castShadow = true; grp.add(deck);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.75, 6), concD); beam.position.set(CX, DECK_Y - 0.9, 0); grp.add(beam);
+    for (const z of [-3.3, 3.3]) { const p = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.85, 0.42), rail); p.position.set(CX, DECK_Y + 1.0, z); grp.add(p); }
+    // ayaklar: sağ banket / orta refüj (merkez ayak) / karşı yolun solu
+    for (const x of [9.5, -7.6, -22]) {
       const h = DECK_Y - 0.6;
-      const pil = new THREE.Mesh(new THREE.BoxGeometry(2.1, h, 2.0), conc); pil.position.set(x, h / 2, 0); pil.castShadow = true; grp.add(pil);
-      const foot = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.5, 2.9), concD); foot.position.set(x, 0.25, 0); grp.add(foot);
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.55, 3.0), concD); cap.position.set(x, DECK_Y - 0.85, 0); grp.add(cap);
+      const pil = new THREE.Mesh(new THREE.BoxGeometry(2.3, h, 2.1), conc); pil.position.set(x, h / 2, 0); pil.castShadow = true; grp.add(pil);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 3.0), concD); foot.position.set(x, 0.25, 0); grp.add(foot);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.6, 3.2), concD); cap.position.set(x, DECK_Y - 0.9, 0); grp.add(cap);
     }
-    // uçlarda dolu ayak duvarları (abutment) — yapıyı yere oturtur
-    for (const x of [-HALF - 0.5, HALF + 0.5]) {
-      const ab = new THREE.Mesh(new THREE.BoxGeometry(3, DECK_Y + 0.4, 6.4), conc); ab.position.set(x, (DECK_Y + 0.4) / 2, 0); ab.castShadow = true; grp.add(ab);
+    // uçlarda dolu ayak duvarları (abutment)
+    for (const x of [L - 0.5, R + 0.5]) {
+      const ab = new THREE.Mesh(new THREE.BoxGeometry(3, DECK_Y + 0.5, 7), conc); ab.position.set(x, (DECK_Y + 0.5) / 2, 0); ab.castShadow = true; grp.add(ab);
     }
     // tabliye lambaları (gece görünürlük + detay)
-    for (let x = -HALF + 2; x <= HALF - 2; x += 5) {
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lampMat); lamp.position.set(x, DECK_Y + 1.7, -3.0); grp.add(lamp);
-      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 5), rail); post.position.set(x, DECK_Y + 1.15, -3.0); grp.add(post);
+    for (let x = L + 2; x <= R - 2; x += 5) {
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lampMat); lamp.position.set(x, DECK_Y + 1.75, -3.3); grp.add(lamp);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 5), rail); post.position.set(x, DECK_Y + 1.2, -3.3); grp.add(post);
     }
     const tops = [];
-    for (let i = 0; i < 2; i++) { const tc = buildCar([0x2b6cb0, 0xd83838][i]); tc.position.set(-12 + i * 18, DECK_Y + 0.6, 0); tc.rotation.y = i ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
+    for (let i = 0; i < 3; i++) { const tc = buildCar([0x2b6cb0, 0xd83838, 0xf2c84b][i]); tc.position.set(L + 6 + i * 12, DECK_Y + 0.6, 0); tc.rotation.y = i % 2 ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
     grp.visible = false; scene.add(grp);
-    return { grp, tops };
+    return { grp, tops, xMin: L + 2, xMax: R - 2 };
   }
   const BRIDGE = (function () {
     const B = buildBridge();
@@ -1262,7 +1262,7 @@
         bz += sp * dt; B.grp.visible = true;
         B.grp.position.set(offX(bz), offY(bz), bz);
         B.grp.rotation.y = -Math.atan2(offX(bz - 6) - offX(bz), 6);
-        for (let i = 0; i < B.tops.length; i++) { const tc = B.tops[i]; const d = i ? -1 : 1; tc.position.x += d * 8 * dt; if (tc.position.x > 17) tc.position.x = -17; else if (tc.position.x < -17) tc.position.x = 17; }
+        for (let i = 0; i < B.tops.length; i++) { const tc = B.tops[i]; const d = i % 2 ? -1 : 1; tc.position.x += d * 8 * dt; if (tc.position.x > B.xMax) tc.position.x = B.xMin; else if (tc.position.x < B.xMin) tc.position.x = B.xMax; }
         if (bz > 42) { bon = false; B.grp.visible = false; }
       }
     }
@@ -1305,11 +1305,15 @@
     const asph = new THREE.MeshStandardMaterial({ color: 0x474b52, roughness: 0.96 });
     const paint = new THREE.MeshStandardMaterial({ color: 0xeceeee, roughness: 0.7 });
     const curbMat = new THREE.MeshStandardMaterial({ color: 0xc2c6cc, roughness: 0.85 });
-    // rampa: sağ-ileri yöne uzanır
-    const rampGrp = new THREE.Group(); rampGrp.position.set(EDGE + 1.5, 0, 6); rampGrp.rotation.y = -0.34; grp.add(rampGrp);
-    const ramp = new THREE.Mesh(new THREE.PlaneGeometry(7, 50), asph); ramp.rotation.x = -Math.PI / 2; ramp.position.set(2.5, 0.016, -21); rampGrp.add(ramp);
-    for (const z of [-3.7, 3.7]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 48), curbMat); cb.position.set(2.5 + (z < 0 ? -3.5 : 3.5), 0.11, -21); rampGrp.add(cb); }
-    for (let i = 0; i < 9; i++) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 2.2), paint); d.rotation.x = -Math.PI / 2; d.position.set(2.5, 0.02, -3 - i * 4.6); rampGrp.add(d); }
+    // bağlantı önlüğü (ağız) — ana yol ile rampayı birleştirir
+    const apron = new THREE.Mesh(new THREE.PlaneGeometry(9, 15), asph); apron.rotation.x = -Math.PI / 2; apron.position.set(EDGE + 2.5, 0.013, -1); grp.add(apron);
+    // rampa: sağ-ileri yöne uzanır, perspektifte uzaklaşır
+    const ANG = 0.40;
+    const rampGrp = new THREE.Group(); rampGrp.position.set(EDGE + 1.0, 0, 5); rampGrp.rotation.y = -ANG; grp.add(rampGrp);
+    const ramp = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 66), asph); ramp.rotation.x = -Math.PI / 2; ramp.position.set(3.0, 0.016, -28); rampGrp.add(ramp);
+    for (const sx of [-4.0, 4.0]) { const el = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 64), paint); el.rotation.x = -Math.PI / 2; el.position.set(3.0 + sx, 0.02, -28); rampGrp.add(el); }   // kenar çizgileri
+    for (const sx of [-4.4, 4.4]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 64), curbMat); cb.position.set(3.0 + sx, 0.11, -28); rampGrp.add(cb); }                       // bordürler
+    for (let i = 0; i < 13; i++) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 2.4), paint); d.rotation.x = -Math.PI / 2; d.position.set(3.0, 0.02, -4 - i * 4.6); rampGrp.add(d); }   // orta çizgi
     // gore (ayrım burnu) — şerit ile rampa arasında V hatch
     for (let i = 0; i < 4; i++) { const ch = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 2.4), paint); ch.rotation.x = -Math.PI / 2; ch.rotation.z = -0.5; ch.position.set(EDGE + 0.6 + i * 0.5, 0.02, 5 - i * 1.4); grp.add(ch); }
     // sarı-siyah bordür (gore burnu boyunca) + chevron uyarı levhası
@@ -1326,7 +1330,7 @@
     // ayrılan araç (sağ şeritten rampaya)
     const diverger = buildCar(0xcfd6dd); attachBlinkers(diverger, 'car'); grp.add(diverger);
     grp.visible = false; scene.add(grp);
-    return { grp, exitMat, diverger, EDGE };
+    return { grp, exitMat, diverger, EDGE, rdx: Math.sin(ANG), rdz: -Math.cos(ANG) };
   }
   const FORK = (function () {
     const F = buildFork();
@@ -1348,19 +1352,19 @@
         F.grp.visible = true;
         F.grp.position.set(offX(fz), offY(fz), fz);
         F.grp.rotation.y = -Math.atan2(offX(fz - 6) - offX(fz), 6);
-        // ayrılan araç: sağ şeritte sağ sinyal, ayrımda yumuşak yay ile rampaya kayar
+        // ayrılan araç: sağ şeritte sağ sinyal, ayrımda yumuşak yay ile rampaya girip uzaklaşır
         const u = Math.max(0, Math.min(1, (fz + 70) / 95));
-        const R0 = laneX(2); let lx, lz, ry;
+        const R0 = laneX(2), P1x = ED + 7, P1z = -4; let lx, lz, ry;
         if (u < 0.4) { const a = u / 0.4; lx = R0; lz = 9 - a * 5; ry = 0; }
-        else if (u < 0.82) {
-          const a = (u - 0.4) / 0.42, mt = 1 - a;
-          const P0x = R0, P0z = 4, Cx = ED + 4, Cz = -2, P1x = ED + 12, P1z = -14;
+        else if (u < 0.74) {
+          const a = (u - 0.4) / 0.34, mt = 1 - a;
+          const P0x = R0, P0z = 4, Cx = ED + 3, Cz = 0;
           lx = mt * mt * P0x + 2 * mt * a * Cx + a * a * P1x;
           lz = mt * mt * P0z + 2 * mt * a * Cz + a * a * P1z;
           const dx = 2 * mt * (Cx - P0x) + 2 * a * (P1x - Cx);
           const dz = 2 * mt * (Cz - P0z) + 2 * a * (P1z - Cz);
           ry = Math.atan2(dx, -dz);
-        } else { const a = (u - 0.82) / 0.18; lx = (ED + 12) + a * 8; lz = -14 - a * 14; ry = -0.34; }
+        } else { const a = (u - 0.74) / 0.26; lx = P1x + F.rdx * a * 44; lz = P1z + F.rdz * a * 44; ry = Math.atan2(F.rdx, -F.rdz); }
         F.diverger.visible = u < 0.99;
         F.diverger.position.set(lx, 0, lz); F.diverger.rotation.y = ry;
         const on = u < 0.85 && (fblink % 0.6) < 0.3;
