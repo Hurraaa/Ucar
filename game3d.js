@@ -177,6 +177,72 @@
     return g;
   }
 
+  // BMW tarzı beyaz sedan (klasik 3-box, böbrek ızgara, yuvarlak farlar)
+  function buildSedan(colorHex) {
+    const g = new THREE.Group();
+    const paint = new THREE.MeshStandardMaterial({ color: colorHex, metalness: 0.45, roughness: 0.28 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x101216, metalness: 0.3, roughness: 0.7 });
+    const glass = new THREE.MeshStandardMaterial({ color: 0x202d38, metalness: 0.5, roughness: 0.1 });
+    const chrome = new THREE.MeshStandardMaterial({ color: 0xd6dbe2, metalness: 0.95, roughness: 0.2 });
+    const head = new THREE.MeshStandardMaterial({ color: 0xeaf2ff, metalness: 0.6, roughness: 0.2, emissive: 0x223044, emissiveIntensity: 0.5 });
+
+    function box(w, h, d, mat, x, y, z) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m;
+    }
+
+    // 3-box gövde (uzun, dik)
+    box(1.94, 0.64, 4.78, paint, 0, 0.68, 0);          // alt gövde
+    box(1.9, 0.32, 4.5, paint, 0, 1.02, 0);            // omuz şeridi
+    box(1.66, 0.74, 2.55, paint, 0, 1.46, -0.05);      // kabin (dik greenhouse)
+    // camlar (geniş, dik)
+    box(1.52, 0.62, 0.1, glass, 0, 1.49, -1.33);       // ön cam (ön = -z)
+    box(1.52, 0.56, 0.1, glass, 0, 1.49, 1.2);         // arka cam
+    box(0.1, 0.5, 2.15, glass, 0.82, 1.5, -0.05);
+    box(0.1, 0.5, 2.15, glass, -0.82, 1.5, -0.05);
+    // bagaj dudağı
+    box(1.7, 0.07, 0.22, paint, 0, 1.1, 2.32);
+
+    // --- ön: BMW böbrek ızgara + farlar ---
+    box(0.94, 0.36, 0.05, chrome, 0, 0.78, -2.37);     // ızgara çerçevesi
+    box(0.34, 0.3, 0.07, dark, -0.21, 0.78, -2.41);    // sol böbrek
+    box(0.34, 0.3, 0.07, dark, 0.21, 0.78, -2.41);     // sağ böbrek
+    box(0.66, 0.2, 0.06, head, 0.66, 0.86, -2.38);     // sağ far
+    box(0.66, 0.2, 0.06, head, -0.66, 0.86, -2.38);    // sol far
+    box(1.5, 0.16, 0.05, dark, 0, 0.44, -2.39);        // ön tampon girişi
+
+    // --- arka: klasik köşe stop lambaları ---
+    const tailMat = new THREE.MeshStandardMaterial({ color: 0xd61f1f, emissive: 0xc01010, emissiveIntensity: 0.55 });
+    box(0.6, 0.26, 0.06, tailMat, 0.66, 0.94, 2.39);
+    box(0.6, 0.26, 0.06, tailMat, -0.66, 0.94, 2.39);
+    box(1.5, 0.16, 0.05, dark, 0, 0.46, 2.39);         // arka tampon
+    // çift egzoz
+    box(0.18, 0.16, 0.1, dark, 0.6, 0.36, 2.42);
+    box(0.18, 0.16, 0.1, dark, -0.6, 0.36, 2.42);
+
+    // kaput rozeti (roundel)
+    const badge = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 14),
+      new THREE.MeshStandardMaterial({ color: 0x2a6cc4, metalness: 0.7, roughness: 0.3 }));
+    badge.rotation.x = Math.PI / 2; badge.position.set(0, 1.0, -2.05); g.add(badge);
+
+    // tekerlekler (uzun aks)
+    const wheelGeo = new THREE.CylinderGeometry(0.46, 0.46, 0.34, 18); wheelGeo.rotateZ(Math.PI / 2);
+    const tireMat = new THREE.MeshStandardMaterial({ color: 0x0c0d10, roughness: 0.85 });
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xc7ccd3, metalness: 0.9, roughness: 0.28 });
+    const wheels = [];
+    for (const [wx, wz] of [[0.99, 1.55], [-0.99, 1.55], [0.99, -1.55], [-0.99, -1.55]]) {
+      const wheel = new THREE.Group();
+      const t = new THREE.Mesh(wheelGeo, tireMat); t.castShadow = true; wheel.add(t);
+      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.36, 10), rimMat);
+      rim.rotation.z = Math.PI / 2; wheel.add(rim);
+      wheel.position.set(wx, 0.46, wz);
+      g.add(wheel); wheels.push(wheel);
+    }
+
+    g.userData = { tailMat, wheels, paint };
+    return g;
+  }
+
   // ----------------------------- Ağaç / Dağ -----------------------------
   function buildTree() {
     const g = new THREE.Group();
@@ -211,7 +277,7 @@
   addMountains();
 
   // ----------------------------- Oyun durumu -----------------------------
-  const State = { MENU: 0, PLAY: 1, OVER: 2, PAUSE: 3 };
+  const State = { MENU: 0, PLAY: 1, OVER: 2, PAUSE: 3, CRASH: 4 };
   let state = State.MENU;
 
   const CAR_COLORS = [
@@ -222,33 +288,57 @@
   const TRAFFIC_HEX = [0xd65a31, 0x3066be, 0x4caf50, 0x9b5de5, 0xf9c74f, 0x577590, 0xbcc0c4, 0x2b2d34];
 
   const MAX_SPEED = 95;          // birim/sn (~ görsel hız)
-  const player = { x: 0, lane: 1, speed: 0, chosen: 0, steer: 0, model: null };
+  const player = { x: 0, lane: 1, speed: 0, chosen: 0, steer: 0, model: null, modelType: 0 };
+  const BUILDERS = [buildCar, buildSedan];
 
   let score = 0, best = Number(localStorage.getItem('ucar3d_best') || 0);
   let level = 1, dist = 0, speedBoost = 1, trafficDensity = 1;
   let flashTimer = 0, flashCooldown = 0;
   const sun_dummy = 0;
 
-  // Oyuncu arabası
-  player.model = buildCar(CAR_COLORS[0].hex);
-  scene.add(player.model);
+  // Oyuncu arabası (model değiştirilebilir)
+  function rebuildPlayer() {
+    const oldX = player.model ? player.model.position.x : 0;
+    if (player.model) scene.remove(player.model);
+    player.model = BUILDERS[player.modelType](CAR_COLORS[player.chosen].hex);
+    player.model.position.x = oldX;
+    scene.add(player.model);
+  }
+  rebuildPlayer();
 
   // Trafik havuzu
   const traffic = [];
+  const CAR_LEN = 4.3;
+  const MIN_GAP = CAR_LEN + 1.6;   // aynı şeritte iki araç arası min. mesafe
   function spawnTraffic() {
     for (const t of traffic) scene.remove(t.model);
     traffic.length = 0;
     const n = Math.round(7 * trafficDensity);
+    const laneNext = [-50, -50, -50];   // her şeritte bir sonraki boş z
     for (let i = 0; i < n; i++) {
       const hex = TRAFFIC_HEX[(Math.random() * TRAFFIC_HEX.length) | 0];
       const m = buildCar(hex);
       scene.add(m);
-      const car = { model: m, lane: (Math.random() * LANES) | 0, z: -60 - i * (70 / trafficDensity) - Math.random() * 40,
+      const lane = i % LANES;                       // şeritlere sırayla dağıt
+      const z = laneNext[lane] - Math.random() * 30;
+      laneNext[lane] = z - (40 + Math.random() * 50);
+      const car = { model: m, lane, z,
         cruise: MAX_SPEED * (0.32 + Math.random() * 0.22), spd: 0, rageMax: MAX_SPEED * (0.6 + Math.random() * 0.18), anger: 0 };
       car.spd = car.cruise;
       car.model.position.set(laneX(car.lane), 0, car.z);
       traffic.push(car);
     }
+  }
+  // Geçilen aracı ileri (uzağa) taşı: yeni şeritteki en öndeki aracın da ilerisine koy
+  function recycleTraffic(car) {
+    car.lane = (Math.random() * LANES) | 0;
+    let frontMost = -180;
+    for (const o of traffic) if (o !== car && o.lane === car.lane) frontMost = Math.min(frontMost, o.z);
+    car.z = frontMost - (MIN_GAP + 30 + Math.random() * 100);
+    car.anger = 0; car.spd = car.cruise;
+    car.cruise = MAX_SPEED * (0.32 + Math.random() * 0.22);
+    car.rageMax = MAX_SPEED * (0.6 + Math.random() * 0.18);
+    car.model.userData.paint.color.setHex(TRAFFIC_HEX[(Math.random() * TRAFFIC_HEX.length) | 0]);
   }
 
   // Ağaçlar (kaydırılan)
@@ -292,6 +382,7 @@
       case 'ArrowDown': case 's': case 'S': keys.brake = true; e.preventDefault(); break;
       case 'p': case 'P': case 'Escape': togglePause(); break;
       case 'f': case 'F': doFlash(); e.preventDefault(); break;
+      case 'h': case 'H': if (state === State.PLAY) Audio.horn(); break;
       case ' ': if (state === State.MENU || state === State.OVER) startGame(); else doFlash(); e.preventDefault(); break;
     }
   });
@@ -363,7 +454,7 @@
       const dz = car.z; // oyuncu z=0, önümüzdekiler dz<0
       if (dz < 0 && dz > -130 && Math.abs(laneX(car.lane) - player.x) < LANE_W * 1.6) { car.anger = 7; any++; }
     }
-    if (any) pushPop('SELEKTÖR!');
+    if (any) { pushPop('SELEKTÖR!'); Audio.horn(); }   // sinirlenen trafik korna çalar
   }
 
   // ----------------------------- Ses -----------------------------
@@ -379,7 +470,21 @@
     function level() { blip(523, 0.1, 'square', 0.25); setTimeout(() => blip(784, 0.16, 'square', 0.25), 90); }
     function ui() { blip(440, 0.06, 'sine', 0.15, 660); }
     function flash() { blip(1200, 0.05, 'square', 0.12, 1800); }
-    return { init: () => { ensure(); if (A && A.state === 'suspended') A.resume(); }, startEngine, stopEngine, engine, coin, crash, level, ui, flash, toggle: () => { enabled = !enabled; return enabled; } };
+    function horn() {
+      ensure(); if (!A || !enabled) return;
+      const dur = 0.55;
+      [330, 415].forEach((f) => {            // iki tonlu klasik korna
+        const o = A.createOscillator(), g = A.createGain();
+        o.type = 'sawtooth'; o.frequency.value = f;
+        g.gain.value = 0.0001;
+        g.gain.exponentialRampToValueAtTime(0.2, A.currentTime + 0.03);
+        g.gain.setValueAtTime(0.2, A.currentTime + dur - 0.1);
+        g.gain.exponentialRampToValueAtTime(0.0001, A.currentTime + dur);
+        const lp = A.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1600;
+        o.connect(lp); lp.connect(g); g.connect(master); o.start(); o.stop(A.currentTime + dur);
+      });
+    }
+    return { init: () => { ensure(); if (A && A.state === 'suspended') A.resume(); }, startEngine, stopEngine, engine, coin, crash, level, ui, flash, horn, toggle: () => { enabled = !enabled; return enabled; } };
   })();
 
   // ----------------------------- HUD / Menü -----------------------------
@@ -408,6 +513,18 @@
     swatchesEl.appendChild(s);
   });
 
+  // Model seçici (Spor Coupe / BMW Sedan)
+  function selectSwatch(i) { player.chosen = i; document.querySelectorAll('.swatch').forEach((el, j) => el.classList.toggle('selected', j === i)); }
+  document.querySelectorAll('.model-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      player.modelType = +btn.dataset.model;
+      document.querySelectorAll('.model-btn').forEach((b) => b.classList.toggle('selected', b === btn));
+      if (player.modelType === 1) selectSwatch(4);   // BMW => beyaz varsayılan
+      rebuildPlayer();
+      Audio.init(); Audio.ui();
+    });
+  });
+
   const pops = [];
   function pushPop(text) { pops.push({ text, t: 0 }); refreshPops(); }
   let popEl = null;
@@ -426,6 +543,7 @@
     level = 1; dist = 0; speedBoost = 1; trafficDensity = 1; score = 0;
     player.x = 0; player.lane = 1; player.speed = 0; player.steer = 0;
     player.model.userData.paint.color.setHex(CAR_COLORS[player.chosen].hex);
+    player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
     spawnTraffic();
     for (const co of coins) { co.taken = false; co.model.visible = true; co.z = -40 - Math.random() * 200; co.lane = (Math.random() * LANES) | 0; co.model.position.x = laneX(co.lane); }
     state = State.PLAY;
@@ -442,7 +560,7 @@
     if (pauseBtn) pauseBtn.classList.add('hidden');
   }
   function gameOver() {
-    state = State.OVER; Audio.stopEngine(); Audio.crash();
+    state = State.OVER; Audio.stopEngine();
     if (score > best) { best = score; localStorage.setItem('ucar3d_best', Math.floor(best)); }
     document.getElementById('go-score').textContent = Math.floor(score);
     document.getElementById('go-best').textContent = Math.floor(best);
@@ -458,6 +576,112 @@
   function advanceLevel() {
     level++; speedBoost = Math.min(1.8, 1 + (level - 1) * 0.1); trafficDensity = Math.min(2, 1 + (level - 1) * 0.16);
     if (levelEl) levelEl.textContent = level; Audio.level(); spawnTraffic();
+  }
+
+  // ----------------------------- Çarpışma efekti -----------------------------
+  const crash = { timer: 0, shake: 0, vy: 0, rx: 0, rz: 0, worldSpd: 0, ended: false };
+  const debris = [];   // { m, vx, vy, vz, rx, ry, rz, life, max, ground }
+  const smoke = [];    // { m, vy, grow, life, max }
+  const debrisGeo = new THREE.BoxGeometry(0.34, 0.34, 0.34);
+  const shardGeo = new THREE.TetrahedronGeometry(0.32);
+  const smokeGeo = new THREE.SphereGeometry(0.7, 8, 8);
+
+  // ekran flaşı (DOM)
+  let flashDiv = document.getElementById('crash-flash');
+  if (!flashDiv) {
+    flashDiv = document.createElement('div');
+    flashDiv.id = 'crash-flash';
+    document.getElementById('game-shell').appendChild(flashDiv);
+  }
+
+  function explode(px) {
+    const colorHex = CAR_COLORS[player.chosen].hex;
+    for (let i = 0; i < 34; i++) {
+      const kind = i % 3;  // 0: kıvılcım, 1: gövde parçası, 2: koyu parça
+      let mat, geo;
+      if (kind === 0) { mat = new THREE.MeshStandardMaterial({ color: 0xffc24a, emissive: 0xff7a10, emissiveIntensity: 2.4 }); geo = debrisGeo; }
+      else { mat = new THREE.MeshStandardMaterial({ color: kind === 1 ? colorHex : 0x23262c, metalness: 0.55, roughness: 0.5 }); geo = i % 2 ? shardGeo : debrisGeo; }
+      const m = new THREE.Mesh(geo, mat);
+      m.scale.setScalar(kind === 0 ? 0.35 + Math.random() * 0.3 : 0.5 + Math.random() * 0.9);
+      m.position.set(px + (Math.random() - 0.5) * 1.4, 1.0 + Math.random() * 0.7, 0.4 + (Math.random() - 0.5) * 1.2);
+      m.castShadow = kind !== 0;
+      scene.add(m);
+      const ang = Math.random() * Math.PI * 2, spd = 4 + Math.random() * 11;
+      debris.push({ m, vx: Math.cos(ang) * spd * 0.55, vy: 5 + Math.random() * 10, vz: Math.sin(ang) * spd * 0.4 + 2.5,
+        rx: (Math.random() - 0.5) * 14, ry: (Math.random() - 0.5) * 14, rz: (Math.random() - 0.5) * 14, life: 0, max: 1.1 + Math.random() * 0.7 });
+    }
+    for (let i = 0; i < 7; i++) {
+      const mat = new THREE.MeshStandardMaterial({ color: 0x4a4d52, transparent: true, opacity: 0.72 });
+      const m = new THREE.Mesh(smokeGeo, mat);
+      m.position.set(px + (Math.random() - 0.5) * 1.6, 1 + Math.random() * 0.6, 0.4 + (Math.random() - 0.5) * 1.4);
+      scene.add(m);
+      smoke.push({ m, vy: 1.4 + Math.random() * 2.2, grow: 1.2 + Math.random() * 1.4, life: 0, max: 1.3 + Math.random() * 0.6 });
+    }
+  }
+
+  function doCrash() {
+    if (state === State.CRASH || state === State.OVER) return;
+    state = State.CRASH;
+    crash.timer = 1.4; crash.shake = 1.0; crash.ended = false;
+    crash.worldSpd = player.speed;
+    crash.vy = 7 + player.speed / MAX_SPEED * 5;          // araba havalanır
+    crash.rx = (Math.random() - 0.5) * 6; crash.rz = (Math.random() - 0.5) * 7;
+    explode(player.x);
+    Audio.stopEngine(); Audio.crash(); Audio.horn();
+    if (flashDiv) { flashDiv.style.transition = 'none'; flashDiv.style.opacity = '0.9'; requestAnimationFrame(() => { flashDiv.style.transition = 'opacity .5s ease-out'; flashDiv.style.opacity = '0'; }); }
+    if (touchControls) touchControls.classList.remove('active');
+    if (pauseBtn) pauseBtn.classList.add('hidden');
+  }
+
+  function updateCrash(dt) {
+    crash.timer -= dt;
+    crash.shake *= Math.pow(0.02, dt);   // ~0.92/16ms civarı sönüm
+    // dünya yavaşlayarak dursun
+    crash.worldSpd *= Math.pow(0.06, dt);
+    const ws = crash.worldSpd;
+    roadTex.offset.y -= ws * dt / SEG_WORLD;
+    for (const tr of trees) { tr.z += ws * dt; if (tr.z > 25) tr.z -= 22 * trees.length / 2; tr.model.position.z = tr.z; }
+
+    // oyuncu arabası savrulur
+    crash.vy -= 24 * dt;
+    player.model.position.y += crash.vy * dt;
+    if (player.model.position.y < 0.15) { player.model.position.y = 0.15; crash.vy *= -0.35; crash.rx *= 0.6; }
+    player.model.rotation.x += crash.rx * dt;
+    player.model.rotation.z += crash.rz * dt;
+    player.model.rotation.y += crash.rz * 0.3 * dt;
+
+    // parçacık fiziği
+    for (let i = debris.length - 1; i >= 0; i--) {
+      const d = debris[i]; d.life += dt; d.vy -= 24 * dt;
+      d.m.position.x += d.vx * dt; d.m.position.y += d.vy * dt; d.m.position.z += d.vz * dt;
+      if (d.m.position.y < 0.16) { d.m.position.y = 0.16; d.vy *= -0.4; d.vx *= 0.7; d.vz *= 0.7; }
+      d.m.rotation.x += d.rx * dt; d.m.rotation.y += d.ry * dt; d.m.rotation.z += d.rz * dt;
+      if (d.life > d.max) { scene.remove(d.m); d.m.material.dispose(); debris.splice(i, 1); }
+    }
+    for (let i = smoke.length - 1; i >= 0; i--) {
+      const s = smoke[i]; s.life += dt; s.m.position.y += s.vy * dt;
+      s.m.scale.setScalar(1 + s.life * s.grow); s.m.material.opacity = 0.72 * Math.max(0, 1 - s.life / s.max);
+      if (s.life > s.max) { scene.remove(s.m); s.m.material.dispose(); smoke.splice(i, 1); }
+    }
+
+    // kamera: çarpışmaya bak + sarsıntı
+    camera.position.x += (player.x * 0.4 - camera.position.x) * 0.06;
+    camera.position.z += (10.5 - camera.position.z) * 0.05;
+    camera.lookAt(player.x, 1.2, -2);
+    const sh = crash.shake * 0.6;
+    camera.position.x += (Math.random() - 0.5) * sh;
+    camera.position.y = 4.3 + (Math.random() - 0.5) * sh;
+    camera.rotation.z += (Math.random() - 0.5) * sh * 0.04;
+
+    if (crash.timer <= 0 && !crash.ended) {
+      crash.ended = true;
+      // kalan parçacıkları temizle
+      for (const d of debris) { scene.remove(d.m); d.m.material.dispose(); }
+      for (const s of smoke) { scene.remove(s.m); s.m.material.dispose(); }
+      debris.length = 0; smoke.length = 0;
+      player.model.rotation.set(0, 0, 0); player.model.position.y = 0;
+      gameOver();
+    }
   }
 
   // ----------------------------- Güncelleme -----------------------------
@@ -507,22 +731,34 @@
       }
     }
 
-    // trafik
+    // trafik — 1) hareket
     for (const car of traffic) {
       if (car.anger > 0) car.anger -= dt;
       const target = car.anger > 0 ? car.rageMax : car.cruise;
       const rate = (car.anger > 0 ? 0.9 : 0.4) * MAX_SPEED;
       car.spd += Math.sign(target - car.spd) * Math.min(Math.abs(target - car.spd), rate * dt);
       car.z += (sp - car.spd) * dt;
-      // geçildi -> ileri taşı
-      if (car.z > 22) { car.z = -200 - Math.random() * 120; car.lane = (Math.random() * LANES) | 0; car.anger = 0; car.spd = car.cruise; }
-      if (car.z < -360) car.z = -200;
+      if (car.z > 24) recycleTraffic(car);     // geçildi -> ileri taşı
+      if (car.z < -400) car.z = -220;
+    }
+    // trafik — 2) araç-takip: aynı şeritte min. mesafeyi koru (içiçe geçmeyi önler)
+    for (let ln = 0; ln < LANES; ln++) {
+      const arr = traffic.filter((c) => c.lane === ln).sort((a, b) => a.z - b.z); // önden (en -z) arkaya
+      for (let i = 1; i < arr.length; i++) {
+        const front = arr[i - 1], back = arr[i];
+        const minZ = front.z + MIN_GAP;
+        if (back.z < minZ) {                    // çok yaklaştı -> geri it ve öne uydur
+          back.z = minZ;
+          if (back.spd > front.spd) back.spd = front.spd;
+        }
+      }
+    }
+    // trafik — 3) modeli yerleştir, teker, çarpışma
+    for (const car of traffic) {
       car.model.position.set(laneX(car.lane), 0, car.z);
-      // tekerlek dönüşü
       const roll = (sp - car.spd) * dt / 0.46;
       for (const wgrp of car.model.userData.wheels) wgrp.children[0].rotation.x += roll;
-      // çarpışma
-      if (Math.abs(car.z) < 3.6 && Math.abs(laneX(car.lane) - player.x) < 1.7 && sp > MAX_SPEED * 0.1) { gameOver(); }
+      if (Math.abs(car.z) < 3.6 && Math.abs(laneX(car.lane) - player.x) < 1.7 && sp > MAX_SPEED * 0.1) { doCrash(); break; }
     }
 
     // oyuncu model güncelle
@@ -589,6 +825,7 @@
     let dt = (now - last) / 1000; last = now;
     if (dt > 0.05) dt = 0.05;
     if (state === State.PLAY) update(dt);
+    else if (state === State.CRASH) updateCrash(dt);
     else if (state === State.MENU) idle(dt);
     renderer.render(scene, camera);
     requestAnimationFrame(loop);

@@ -111,6 +111,30 @@ html, body {
 .pause-btn svg { width: 22px; height: 22px; fill: currentColor; }
 .pause-btn.hidden { display: none; }
 
+/* Model seçici butonları */
+.models { display: flex; gap: 10px; justify-content: center; margin-bottom: 14px; }
+.model-btn {
+  flex: 1; max-width: 160px;
+  padding: 10px 12px; border-radius: 12px;
+  background: rgba(255,255,255,0.06);
+  border: 2px solid rgba(255,255,255,0.14);
+  color: #cdd6e4; font-weight: 700; font-size: 14px;
+  cursor: pointer; transition: all .15s ease;
+}
+.model-btn:hover { background: rgba(255,255,255,0.12); }
+.model-btn.selected {
+  border-color: #ffcf4d; color: #fff;
+  background: linear-gradient(180deg, rgba(255,207,77,0.22), rgba(255,207,77,0.08));
+  box-shadow: 0 0 14px rgba(255,207,77,0.3);
+}
+
+/* Çarpışma ekran flaşı */
+#crash-flash {
+  position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 60%, rgba(255,240,200,0.95), rgba(255,120,40,0.5) 40%, rgba(180,20,10,0.25) 70%, transparent 100%);
+  opacity: 0; pointer-events: none; z-index: 30;
+}
+
 /* 3B toplama efekti (yüzen yazı) */
 #pop3d {
   position: absolute;
