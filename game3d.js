@@ -1058,23 +1058,24 @@
     const sideRoad = new THREE.Mesh(new THREE.PlaneGeometry(9, 66), asph); sideRoad.rotation.x = -Math.PI / 2; sideRoad.position.set(0, 0.015, -31); sideGrp.add(sideRoad);
     for (let i = 0; i < 14; i++) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 2.4), paint); d.rotation.x = -Math.PI / 2; d.position.set(0, 0.02, -4 - i * 4.6); sideGrp.add(d); }
     for (const sx of [-4.5, 4.5]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.22, 64), curbMat); cb.position.set(sx, 0.11, -31); sideGrp.add(cb); }
+    for (const sx of [-4.0, 4.0]) { const el = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 62), paint); el.rotation.x = -Math.PI / 2; el.position.set(sx, 0.02, -31); sideGrp.add(el); }   // kenar çizgileri
     const mouth = new THREE.Mesh(new THREE.PlaneGeometry(11, 13), asph); mouth.rotation.x = -Math.PI / 2; mouth.position.set(-EDGE - 3.5, 0.013, 0); grp.add(mouth);
-    // --- Ana yol: yaya geçidi (zebra) + DUR çizgisi + sol kenar ---
-    for (let x = -EDGE + 0.4; x <= EDGE - 0.4; x += 1.25) flat(0.6, 4.6, paint, x, -0.4, 0.022);
-    flat(2 * EDGE - 0.5, 0.7, paint, 0, 3.2, 0.022);
+    // --- Ana yol: yaya geçidi (merdiven tipi, yola dik barlar) + DUR çizgisi + sol kenar ---
+    for (let i = 0; i < 7; i++) flat(2 * EDGE - 1.0, 0.52, paint, 0, -1.9 + i * 0.66, 0.024);   // zebra barları (enlemesine)
+    flat(2 * EDGE - 0.5, 0.7, paint, 0, 3.4, 0.022);                                            // DUR çizgisi
     for (let z = -9; z <= 9; z += 3) flat(0.18, 1.7, paint, EDGE - 0.15, z, 0.02);
-    // --- Trafik ışığı (sağ köşe, sürücüye bakar) ---
+    // --- Trafik ışığı (her iki köşede, sürücüye bakar) ---
     function trafficLight(px, pz) {
       const lg = new THREE.Group();
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 5.4, 8), poleMat); pole.position.y = 2.7; lg.add(pole);
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.5), poleMat); arm.position.set(0, 5.1, 0.75); lg.add(arm);
-      const box = new THREE.Mesh(new THREE.BoxGeometry(0.52, 1.55, 0.36), new THREE.MeshStandardMaterial({ color: 0x1c1f23, roughness: 0.7 })); box.position.set(0, 4.7, 1.5); lg.add(box);
-      const mk = (col, y) => { const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.15, roughness: 0.5 }); const l = new THREE.Mesh(new THREE.CircleGeometry(0.17, 16), mat); l.position.set(0, y, 1.69); lg.add(l); return mat; };
-      const r = mk(0xff2a2a, 5.16), y = mk(0xffd23a, 4.7), g = mk(0x29d65a, 4.24);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 5.6, 8), poleMat); pole.position.y = 2.8; lg.add(pole);
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 1.6), poleMat); arm.position.set(0, 5.3, 0.8); lg.add(arm);
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.62, 1.9, 0.42), new THREE.MeshStandardMaterial({ color: 0x16181c, roughness: 0.7 })); box.position.set(0, 4.85, 1.62); lg.add(box);
+      const mk = (col, y) => { const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.12, roughness: 0.5 }); const l = new THREE.Mesh(new THREE.CircleGeometry(0.22, 18), mat); l.position.set(0, y, 1.84); lg.add(l); return mat; };
+      const r = mk(0xff2a2a, 5.4), y = mk(0xffd23a, 4.85), g = mk(0x29d65a, 4.3);
       lg.position.set(px, 0, pz); grp.add(lg);
       return { r, y, g };
     }
-    const lamps = trafficLight(EDGE + 1.1, 2.2);
+    const lamps = [trafficLight(EDGE + 1.2, 2.4), trafficLight(-EDGE - 1.2, 2.4)];
     // --- Mavi yön levhası (sola ok + yer adı) ---
     const blueMat = new THREE.MeshStandardMaterial({ map: makeBlueSignTex('Yeşilyurt'), transparent: true, roughness: 0.55 });
     const bluePanel = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 1.6), blueMat); bluePanel.position.set(EDGE + 3.0, 3.4, -6); grp.add(bluePanel);
@@ -1133,12 +1134,14 @@
         warn.visible = wz < 22 && wz > -360;
         warn.position.set((ROAD_W / 2 + 4.2) + offX(wz), offY(wz), wz);
         warn.rotation.y = -Math.atan2(offX(wz - 6) - offX(wz), 6);
-        // trafik ışığı döngüsü: yeşil -> sarı -> kırmızı
+        // trafik ışığı döngüsü: yeşil -> sarı -> kırmızı (iki köşe)
         const ph = jblink % 9;
         const red = ph >= 6, yel = ph >= 5 && ph < 6, grn = ph < 5;
-        J.lamps.r.emissiveIntensity = red ? 2.6 : 0.12;
-        J.lamps.y.emissiveIntensity = yel ? 2.6 : 0.12;
-        J.lamps.g.emissiveIntensity = grn ? 2.6 : 0.12;
+        for (const ls of J.lamps) {
+          ls.r.emissiveIntensity = red ? 2.8 : 0.1;
+          ls.y.emissiveIntensity = yel ? 2.8 : 0.1;
+          ls.g.emissiveIntensity = grn ? 2.8 : 0.1;
+        }
         // bekleyen araç (yan yolda): kırmızı/sarıda fren ışığı yanık bekler, yeşilde sönük
         J.wait.userData.tailMat.emissiveIntensity = grn ? 0.6 : 2.0;
         // dönen araç: sol şeritte yaklaşır (fren+sol sinyal), yumuşak yay ile yan yola döner ve uzaklaşır
