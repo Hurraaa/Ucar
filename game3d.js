@@ -1177,19 +1177,33 @@
   // ----------------------------- Viyadük / üst geçit (altından geçilir) -----------------------------
   function buildBridge() {
     const grp = new THREE.Group();
-    const conc = new THREE.MeshStandardMaterial({ color: 0x9a9e9c, roughness: 0.92 });
-    const concD = new THREE.MeshStandardMaterial({ color: 0x7c807d, roughness: 0.95 });
-    const rail = new THREE.MeshStandardMaterial({ color: 0xc6cac8, roughness: 0.8 });
-    const DECK_Y = 7.0, HALF = 17;
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 1.1, 6), conc); deck.position.set(0, DECK_Y, 0); deck.castShadow = true; grp.add(deck);
-    const under = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.5, 5.2), concD); under.position.set(0, DECK_Y - 0.72, 0); grp.add(under);
-    for (const z of [-2.75, 2.75]) { const p = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.85, 0.4), rail); p.position.set(0, DECK_Y + 0.95, z); grp.add(p); }
-    for (const x of [-8.6, 8.6, -15, 15]) {
-      const pil = new THREE.Mesh(new THREE.BoxGeometry(1.6, DECK_Y - 0.45, 1.7), conc); pil.position.set(x, (DECK_Y - 0.45) / 2, 0); pil.castShadow = true; grp.add(pil);
-      const cap = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.5, 2.6), concD); cap.position.set(x, DECK_Y - 0.75, 0); grp.add(cap);
+    const conc = new THREE.MeshStandardMaterial({ color: 0xb4b7b3, roughness: 0.9 });
+    const concD = new THREE.MeshStandardMaterial({ color: 0x8e918d, roughness: 0.95 });
+    const rail = new THREE.MeshStandardMaterial({ color: 0xd2d5d2, roughness: 0.8 });
+    const lampMat = new THREE.MeshStandardMaterial({ color: 0xffe9b0, emissive: 0xffd98a, emissiveIntensity: 1.6, roughness: 0.5 });
+    const DECK_Y = 6.7, HALF = 18;
+    // tabliye + alt kiriş (kalın, dolu görünüm)
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 1.2, 6.4), conc); deck.position.set(0, DECK_Y, 0); deck.castShadow = true; grp.add(deck);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.7, 5.4), concD); beam.position.set(0, DECK_Y - 0.85, 0); grp.add(beam);
+    for (const z of [-3.0, 3.0]) { const p = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.8, 0.4), rail); p.position.set(0, DECK_Y + 0.95, z); grp.add(p); }
+    // ayaklar (kalın) + temel + başlık
+    for (const x of [-8.4, 8.4, -14, 14]) {
+      const h = DECK_Y - 0.6;
+      const pil = new THREE.Mesh(new THREE.BoxGeometry(2.1, h, 2.0), conc); pil.position.set(x, h / 2, 0); pil.castShadow = true; grp.add(pil);
+      const foot = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.5, 2.9), concD); foot.position.set(x, 0.25, 0); grp.add(foot);
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.55, 3.0), concD); cap.position.set(x, DECK_Y - 0.85, 0); grp.add(cap);
+    }
+    // uçlarda dolu ayak duvarları (abutment) — yapıyı yere oturtur
+    for (const x of [-HALF - 0.5, HALF + 0.5]) {
+      const ab = new THREE.Mesh(new THREE.BoxGeometry(3, DECK_Y + 0.4, 6.4), conc); ab.position.set(x, (DECK_Y + 0.4) / 2, 0); ab.castShadow = true; grp.add(ab);
+    }
+    // tabliye lambaları (gece görünürlük + detay)
+    for (let x = -HALF + 2; x <= HALF - 2; x += 5) {
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lampMat); lamp.position.set(x, DECK_Y + 1.7, -3.0); grp.add(lamp);
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 5), rail); post.position.set(x, DECK_Y + 1.15, -3.0); grp.add(post);
     }
     const tops = [];
-    for (let i = 0; i < 2; i++) { const tc = buildCar([0x2b6cb0, 0xd83838][i]); tc.position.set(-12 + i * 18, DECK_Y + 0.55, 0); tc.rotation.y = i ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
+    for (let i = 0; i < 2; i++) { const tc = buildCar([0x2b6cb0, 0xd83838][i]); tc.position.set(-12 + i * 18, DECK_Y + 0.6, 0); tc.rotation.y = i ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
     grp.visible = false; scene.add(grp);
     return { grp, tops };
   }
