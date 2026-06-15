@@ -782,21 +782,27 @@
     if (tr.veg) tr.group.remove(tr.veg);
     tr.veg = buildVeg(kind); tr.group.add(tr.veg);
   }
-  function placeTree(tr) {               // geri dönüştürülünce bölgeye göre yerleştir
-    tr.z -= (200 / curRegion.density) + Math.random() * 60;
-    const land = curRegion.sea ? -curRegion.sea : (Math.random() < 0.5 ? -1 : 1);
-    tr.x = treeX(land);
+  // Ağaç geri dönüşümü: her zaman EN ARKAYA (uzağa, sisin içine) doğar -> yaklaşırken netleşir, pop-in yok
+  function placeTree(tr) {
+    // sahil bölgesinde deniz tarafındaki ağaçları gizle
+    if (curRegion.sea && tr.side === curRegion.sea) { tr.group.visible = false; tr.z = -500; return; }
+    let far = -110;
+    for (const o of trees) if (o !== tr && o.side === tr.side && o.group.visible) far = Math.min(far, o.z);
+    const gap = (7 + Math.random() * 5) / curRegion.density;   // yoğunluk = aralık
+    tr.z = far - gap;
+    tr.x = treeX(tr.side);
     setTreeVeg(tr, curRegion.tree);
-    tr.group.visible = Math.random() < Math.min(1, curRegion.density);
+    tr.group.visible = true;
     const s = (0.8 + Math.random() * 0.7) * (curRegion.tree === 'lush' ? 1.25 : curRegion.tree === 'maki' ? 0.7 : 1);
     tr.group.scale.setScalar(s);
   }
   // sol = bölünmüş yolun karşı şeridi olduğundan ağaçlar sol tarafta karşı yolun ötesine konur
   function treeX(land) { const base = land < 0 ? 23 : (ROAD_W / 2 + 4); return land * (base + Math.random() * 14); }
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 40; i++) {
     const group = new THREE.Group(); scene.add(group);
     const side = i % 2 ? 1 : -1;
-    const tr = { group, veg: null, kind: null, z: -i * 24 - Math.random() * 20, x: treeX(side) };
+    const tr = { group, veg: null, kind: null, side, z: -Math.floor(i / 2) * 14 - Math.random() * 8, x: 0 };
+    tr.x = treeX(side);
     setTreeVeg(tr, 'mixed');
     group.position.set(tr.x, 0, tr.z); group.scale.setScalar(0.9 + Math.random() * 0.6);
     trees.push(tr);
