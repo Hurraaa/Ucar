@@ -1244,15 +1244,30 @@
     for (const x of [L - 0.5, R + 0.5]) {
       const ab = new THREE.Mesh(new THREE.BoxGeometry(3, DECK_Y + 0.5, 7), conc); ab.position.set(x, (DECK_Y + 0.5) / 2, 0); ab.castShadow = true; grp.add(ab);
     }
+    // iki uçta toprak dolgu/şev (embankment) + üstünde yere inen yol -> köprü boşlukta bitmez
+    const EMB = 20, TOP = DECK_Y + 0.62;
+    const embMat = new THREE.MeshStandardMaterial({ color: 0x4f8a44, roughness: 1, flatShading: true });
+    const slopeRoadMat = new THREE.MeshStandardMaterial({ color: 0x50545b, roughness: 0.95 });
+    function tri(verts, faces, mat) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3)); g.setIndex(faces); g.computeVertexNormals(); const m = new THREE.Mesh(g, mat); m.castShadow = true; grp.add(m); }
+    for (const dir of [1, -1]) {
+      const xin = dir > 0 ? R : L, xout = xin + dir * EMB, hz = 4.2;
+      // şev gövdesi (üçgen prizma)
+      tri([xin, TOP, -hz, xin, 0, -hz, xout, 0, -hz, xin, TOP, hz, xin, 0, hz, xout, 0, hz],
+        [0, 1, 2, 5, 4, 3, 1, 4, 5, 1, 5, 2, 0, 2, 5, 0, 5, 3, 0, 3, 4, 0, 4, 1], embMat);
+      // şev üstündeki yol (eğimli)
+      const rz = 3.0;
+      tri([xin, TOP + 0.04, -rz, xin, TOP + 0.04, rz, xout, 0.04, rz, xout, 0.04, -rz], [0, 1, 2, 0, 2, 3, 2, 1, 0, 3, 2, 0], slopeRoadMat);
+    }
+    function deckCarY(x) { let f = 0; if (x > R) f = Math.min(1, (x - R) / EMB); else if (x < L) f = Math.min(1, (L - x) / EMB); return (DECK_Y + 0.6) * (1 - f) + 0.62 * f; }
     // tabliye lambaları (gece görünürlük + detay)
     for (let x = L + 2; x <= R - 2; x += 5) {
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), lampMat); lamp.position.set(x, DECK_Y + 1.75, -3.3); grp.add(lamp);
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.2, 5), rail); post.position.set(x, DECK_Y + 1.2, -3.3); grp.add(post);
     }
     const tops = [];
-    for (let i = 0; i < 3; i++) { const tc = buildCar([0x2b6cb0, 0xd83838, 0xf2c84b][i]); tc.position.set(L + 6 + i * 12, DECK_Y + 0.6, 0); tc.rotation.y = i % 2 ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
+    for (let i = 0; i < 3; i++) { const x0 = L - EMB + 6 + i * 18; const tc = buildCar([0x2b6cb0, 0xd83838, 0xf2c84b][i]); tc.position.set(x0, deckCarY(x0), 0); tc.rotation.y = i % 2 ? -Math.PI / 2 : Math.PI / 2; grp.add(tc); tops.push(tc); }
     grp.visible = false; scene.add(grp);
-    return { grp, tops, xMin: L + 2, xMax: R - 2 };
+    return { grp, tops, xMin: L - EMB + 2, xMax: R + EMB - 2, deckCarY };
   }
   const BRIDGE = (function () {
     const B = buildBridge();
@@ -1263,7 +1278,7 @@
         bz += sp * dt; B.grp.visible = true;
         B.grp.position.set(offX(bz), offY(bz), bz);
         B.grp.rotation.y = -Math.atan2(offX(bz - 6) - offX(bz), 6);
-        for (let i = 0; i < B.tops.length; i++) { const tc = B.tops[i]; const d = i % 2 ? -1 : 1; tc.position.x += d * 8 * dt; if (tc.position.x > B.xMax) tc.position.x = B.xMin; else if (tc.position.x < B.xMin) tc.position.x = B.xMax; }
+        for (let i = 0; i < B.tops.length; i++) { const tc = B.tops[i]; const d = i % 2 ? -1 : 1; tc.position.x += d * 8 * dt; if (tc.position.x > B.xMax) tc.position.x = B.xMin; else if (tc.position.x < B.xMin) tc.position.x = B.xMax; tc.position.y = B.deckCarY(tc.position.x); }
         if (bz > 42) { bon = false; B.grp.visible = false; }
       }
     }
