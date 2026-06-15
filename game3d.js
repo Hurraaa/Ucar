@@ -1046,7 +1046,7 @@
   let junctionActive = false, junctionZ = 999;   // trafik bu civarda sol şeritte dikkatli gider
   let forkActive = false;                         // çıkış rampası aktifken sağ bariyer açılır
   const JUNCTION_ON = false;                       // bölünmüş yolda sol kavşak kapalı (yerine çıkış + üst geçit)
-  const FORK_ON = false;                            // çıkış rampası geçici kapalı (yeniden tasarlanacak)
+  const FORK_ON = true;                             // çıkış rampası (yeni eğri-şerit tasarım)
   function makeTriSignTex() {
     const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d'); g.clearRect(0, 0, 256, 256);
     g.beginPath(); g.moveTo(128, 22); g.lineTo(238, 214); g.lineTo(18, 214); g.closePath(); g.fillStyle = '#d11'; g.fill();
@@ -1318,35 +1318,46 @@
   function buildFork() {
     const grp = new THREE.Group();
     const EDGE = ROAD_W / 2 + 0.9;
-    const asph = new THREE.MeshStandardMaterial({ color: 0x474b52, roughness: 0.96 });
-    const paint = new THREE.MeshStandardMaterial({ color: 0xeceeee, roughness: 0.7 });
+    const asph = new THREE.MeshStandardMaterial({ color: 0x4b4f56, roughness: 0.96, side: THREE.DoubleSide });
+    const paint = new THREE.MeshStandardMaterial({ color: 0xeceeee, roughness: 0.7, side: THREE.DoubleSide });
     const curbMat = new THREE.MeshStandardMaterial({ color: 0xc2c6cc, roughness: 0.85 });
-    // bağlantı önlüğü (ağız) — ana yol ile rampayı birleştirir
-    const apron = new THREE.Mesh(new THREE.PlaneGeometry(9, 15), asph); apron.rotation.x = -Math.PI / 2; apron.position.set(EDGE + 2.5, 0.013, -1); grp.add(apron);
-    // rampa: sağ-ileri yöne uzanır, perspektifte uzaklaşır
-    const ANG = 0.40;
-    const rampGrp = new THREE.Group(); rampGrp.position.set(EDGE + 1.0, 0, 5); rampGrp.rotation.y = -ANG; grp.add(rampGrp);
-    const ramp = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 66), asph); ramp.rotation.x = -Math.PI / 2; ramp.position.set(3.0, 0.016, -28); rampGrp.add(ramp);
-    for (const sx of [-4.0, 4.0]) { const el = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 64), paint); el.rotation.x = -Math.PI / 2; el.position.set(3.0 + sx, 0.02, -28); rampGrp.add(el); }   // kenar çizgileri
-    for (const sx of [-4.4, 4.4]) { const cb = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.22, 64), curbMat); cb.position.set(3.0 + sx, 0.11, -28); rampGrp.add(cb); }                       // bordürler
-    for (let i = 0; i < 13; i++) { const d = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 2.4), paint); d.rotation.x = -Math.PI / 2; d.position.set(3.0, 0.02, -4 - i * 4.6); rampGrp.add(d); }   // orta çizgi
-    // gore (ayrım burnu) — şerit ile rampa arasında V hatch
-    for (let i = 0; i < 4; i++) { const ch = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 2.4), paint); ch.rotation.x = -Math.PI / 2; ch.rotation.z = -0.5; ch.position.set(EDGE + 0.6 + i * 0.5, 0.02, 5 - i * 1.4); grp.add(ch); }
-    // sarı-siyah bordür (gore burnu boyunca) + chevron uyarı levhası
-    stripedCurb(grp, EDGE + 1.4, 3.5, 5.6, -0.34);
-    const chevA = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.3), new THREE.MeshStandardMaterial({ map: chevronTex, roughness: 0.6, side: THREE.DoubleSide }));
-    chevA.position.set(EDGE + 2.2, 1.5, 2.5); grp.add(chevA);
-    const chevPost = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.7, 6), curbMat); chevPost.position.set(EDGE + 2.2, 0.7, 2.5); grp.add(chevPost);
-    // ana yol sağ kenar (kesik) + ayrımdan önce sağ şeritte düz/çıkış oku yok; sadece kenar
-    for (let z = -8; z <= 9; z += 3) { const e = new THREE.Mesh(new THREE.PlaneGeometry(0.18, 1.7), paint); e.rotation.x = -Math.PI / 2; e.position.set(EDGE - 0.15, 0.02, z); grp.add(e); }
-    // yeşil çıkış levhası (sağ, sürücüye bakar)
+    // merkez hat: gore'dan uzaklara doğru kıvrılıp incelir (yola yapışık, aynı asfalt seviyesi)
+    const P0 = { x: EDGE + 1.4, z: 6 }, C = { x: EDGE + 7, z: -16 }, P1 = { x: EDGE + 27, z: -58 };
+    const N = 20, cl = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, mt = 1 - t;
+      cl.push({ x: mt * mt * P0.x + 2 * mt * t * C.x + t * t * P1.x, z: mt * mt * P0.z + 2 * mt * t * C.z + t * t * P1.z, w: 1.95 * (1 - t) + 1.1 * t });
+    }
+    for (let i = 0; i <= N; i++) { const a = cl[Math.max(0, i - 1)], b = cl[Math.min(N, i + 1)]; let tx = b.x - a.x, tz = b.z - a.z; const L = Math.hypot(tx, tz) || 1; cl[i].nx = -tz / L; cl[i].nz = tx / L; cl[i].tx = tx / L; cl[i].tz = tz / L; }
+    function strip(offFn, halfFn, y, mat) {
+      const pos = [], idx = [];
+      for (let i = 0; i <= N; i++) { const s = cl[i], off = offFn(s), hw = halfFn(s), cx = s.x + s.nx * off, cz = s.z + s.nz * off; pos.push(cx - s.nx * hw, y, cz - s.nz * hw); pos.push(cx + s.nx * hw, y, cz + s.nz * hw); }
+      for (let i = 0; i < N; i++) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+      grp.add(new THREE.Mesh(g, mat));
+    }
+    strip(() => 0, s => s.w, 0.016, asph);                       // rampa asfaltı (eğri + incelen)
+    strip(s => s.w - 0.12, () => 0.09, 0.022, paint);            // sağ kenar çizgisi
+    strip(s => -(s.w - 0.12), () => 0.09, 0.022, paint);         // sol kenar çizgisi
+    // orta kesik çizgi (tanjanta hizalı küçük parçalar)
+    for (let i = 1; i < N; i += 2) { const s = cl[i]; const d = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 1.7), paint); d.rotation.x = -Math.PI / 2; d.rotation.z = -Math.atan2(s.tx, s.tz); d.position.set(s.x, 0.02, s.z); grp.add(d); }
+    function quad(v, mat, y) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); g.setIndex([0, 1, 2, 0, 2, 3, 2, 1, 0, 3, 2, 0]); g.computeVertexNormals(); grp.add(new THREE.Mesh(g, mat)); }
+    // yavaşlama şeridi (decel): gore'dan önce yol sağa genişler — aynı asfalt, yere yapışık (gri yama yok)
+    quad([EDGE - 0.05, 0.015, 26, EDGE - 0.05, 0.015, 5, EDGE + 3.4, 0.015, 5, EDGE + 1.0, 0.015, 26], asph);
+    // gore burnu (beyaz boyalı üçgen ada)
+    quad([EDGE + 0.15, 0.024, 6.5, EDGE + 0.15, 0.024, 1.5, EDGE + 1.7, 0.024, 2.2, EDGE + 1.4, 0.024, 6.0], paint);
+    stripedCurb(grp, EDGE + 1.5, 6.5, 5.5, -0.32);
+    // yeşil çıkış levhası + sarı-siyah chevron (sağda, sürücüye bakar)
     const exitMat = new THREE.MeshStandardMaterial({ map: makeExitSignTex('Çıkış'), transparent: true, roughness: 0.6 });
-    const exitPanel = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 1.85), exitMat); exitPanel.position.set(EDGE + 3.2, 3.4, -3); grp.add(exitPanel);
-    const exitPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.6, 6), curbMat); exitPost.position.set(EDGE + 3.2, 1.7, -3); grp.add(exitPost);
-    // ayrılan araç (sağ şeritten rampaya)
+    const exitPanel = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 1.85), exitMat); exitPanel.position.set(EDGE + 3.8, 3.6, -9); grp.add(exitPanel);
+    const exitPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.9, 6), curbMat); exitPost.position.set(EDGE + 3.8, 1.8, -9); grp.add(exitPost);
+    const chevA = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.3), new THREE.MeshStandardMaterial({ map: chevronTex, roughness: 0.6, side: THREE.DoubleSide }));
+    chevA.position.set(EDGE + 2.7, 1.5, 1.0); grp.add(chevA);
+    const chevPost = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.7, 6), curbMat); chevPost.position.set(EDGE + 2.7, 0.7, 1.0); grp.add(chevPost);
+    // ayrılan araç
     const diverger = buildCar(0xcfd6dd); attachBlinkers(diverger, 'car'); grp.add(diverger);
     grp.visible = false; scene.add(grp);
-    return { grp, exitMat, diverger, EDGE, rdx: Math.sin(ANG), rdz: -Math.cos(ANG) };
+    return { grp, exitMat, diverger, EDGE, cl };
   }
   const FORK = (function () {
     const F = buildFork();
@@ -1368,19 +1379,20 @@
         F.grp.visible = true;
         F.grp.position.set(offX(fz), offY(fz), fz);
         F.grp.rotation.y = -Math.atan2(offX(fz - 6) - offX(fz), 6);
-        // ayrılan araç: sağ şeritte sağ sinyal, ayrımda yumuşak yay ile rampaya girip uzaklaşır
+        // ayrılan araç: sağ şeritten yavaşlama şeridine geçer, sonra rampa merkez hattını izleyip uzaklaşır
         const u = Math.max(0, Math.min(1, (fz + 70) / 95));
-        const R0 = laneX(2), P1x = ED + 7, P1z = -4; let lx, lz, ry;
-        if (u < 0.4) { const a = u / 0.4; lx = R0; lz = 9 - a * 5; ry = 0; }
-        else if (u < 0.74) {
-          const a = (u - 0.4) / 0.34, mt = 1 - a;
-          const P0x = R0, P0z = 4, Cx = ED + 3, Cz = 0;
-          lx = mt * mt * P0x + 2 * mt * a * Cx + a * a * P1x;
-          lz = mt * mt * P0z + 2 * mt * a * Cz + a * a * P1z;
-          const dx = 2 * mt * (Cx - P0x) + 2 * a * (P1x - Cx);
-          const dz = 2 * mt * (Cz - P0z) + 2 * a * (P1z - Cz);
-          ry = Math.atan2(dx, -dz);
-        } else { const a = (u - 0.74) / 0.26; lx = P1x + F.rdx * a * 44; lz = P1z + F.rdz * a * 44; ry = Math.atan2(F.rdx, -F.rdz); }
+        const cl = F.cl; let lx, lz, ry;
+        if (u < 0.4) {
+          const a = u / 0.4, e = a * a * (3 - 2 * a);
+          lx = laneX(2) * (1 - e) + cl[0].x * e;
+          lz = 9 * (1 - e) + cl[0].z * e;
+          ry = Math.atan2(cl[0].x - laneX(2), -(cl[0].z - 9)) * e * 0.7;
+        } else {
+          const fi = ((u - 0.4) / 0.6) * (cl.length - 1), i0 = Math.min(cl.length - 2, Math.floor(fi)), tt = fi - i0;
+          const s0 = cl[i0], s1 = cl[i0 + 1];
+          lx = s0.x + (s1.x - s0.x) * tt; lz = s0.z + (s1.z - s0.z) * tt;
+          ry = Math.atan2(s1.x - s0.x, -(s1.z - s0.z));
+        }
         F.diverger.visible = u < 0.99;
         F.diverger.position.set(lx, 0, lz); F.diverger.rotation.y = ry;
         const on = u < 0.85 && (fblink % 0.6) < 0.3;
