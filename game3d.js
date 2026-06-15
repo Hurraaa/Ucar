@@ -1046,6 +1046,7 @@
   let junctionActive = false, junctionZ = 999;   // trafik bu civarda sol şeritte dikkatli gider
   let forkActive = false;                         // çıkış rampası aktifken sağ bariyer açılır
   const JUNCTION_ON = false;                       // bölünmüş yolda sol kavşak kapalı (yerine çıkış + üst geçit)
+  const FORK_ON = false;                            // çıkış rampası geçici kapalı (yeniden tasarlanacak)
   function makeTriSignTex() {
     const c = document.createElement('canvas'); c.width = 256; c.height = 256; const g = c.getContext('2d'); g.clearRect(0, 0, 256, 256);
     g.beginPath(); g.moveTo(128, 22); g.lineTo(238, 214); g.lineTo(18, 214); g.closePath(); g.fillStyle = '#d11'; g.fill();
@@ -1337,7 +1338,7 @@
     const ED = F.EDGE;
     let fz = 0, fon = false, ft = 24 + Math.random() * 22, fblink = 0;
     function update(dt, sp) {
-      if (!fon) {
+      if (!fon && FORK_ON) {
         ft -= dt;
         if (ft <= 0) {
           fon = true; fz = -340; fblink = 0;
