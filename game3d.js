@@ -258,9 +258,9 @@
   roadTex.wrapS = THREE.ClampToEdgeWrapping; roadTex.wrapT = THREE.RepeatWrapping;
   roadTex.repeat.set(1, (RIBBON_Z0 - RIBBON_Z1) / SEG_WORLD);
   const roadRibbon = buildRibbon(ROAD_W + 1.6, new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 }), 0.02, 96);
-  // --- Bölünmüş yol: solda karşı yön gidişi (orta refüj + bariyer) ---
-  const MED_C = -(ROAD_W / 2 + 2.5);           // orta refüj/bariyer merkezi (sol)
-  const OPP_C = -(ROAD_W / 2 + 5.0 + ROAD_W / 2); // karşı yol merkezi (sol)
+  // --- Bölünmüş yol: solda karşı yön gidişi (dar orta refüj + bariyer, karşı yol yakın/görünür) ---
+  const MED_C = -(ROAD_W / 2 + 1.6);              // orta refüj/bariyer merkezi (sol)
+  const OPP_C = -(ROAD_W / 2 + 3.3 + ROAD_W / 2); // karşı yol merkezi (sol)
   const oppRoad = buildRibbon(ROAD_W + 1.6, new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.85 }), 0.02, 96, OPP_C);
   const medianRail = buildRail(MED_C, 0.45, 0.98, 0xcdd1d6, 0.55);   // orta refüj otokorkuluğu
   let rightRail = buildRail(ROAD_W / 2 + 2.4, 0.45, 0.92, 0xc6cad0, 0.5);  // sağ banket otokorkuluğu
@@ -1233,7 +1233,7 @@
     const beam = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.75, 6), concD); beam.position.set(CX, DECK_Y - 0.9, 0); grp.add(beam);
     for (const z of [-3.3, 3.3]) { const p = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, 0.85, 0.42), rail); p.position.set(CX, DECK_Y + 1.0, z); grp.add(p); }
     // ayaklar: sağ banket / orta refüj (merkez ayak) / karşı yolun solu
-    for (const x of [9.5, -7.6, -22]) {
+    for (const x of [9.5, -6.7, -20]) {
       const h = DECK_Y - 0.6;
       const pil = new THREE.Mesh(new THREE.BoxGeometry(2.3, h, 2.1), conc); pil.position.set(x, h / 2, 0); pil.castShadow = true; grp.add(pil);
       const foot = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 3.0), concD); foot.position.set(x, 0.25, 0); grp.add(foot);
